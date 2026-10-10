@@ -803,13 +803,14 @@ def _validate_stream_commit_after(state: State) -> None:
     # reads as `abandoned`), it is recorded as a draw that committed no turn,
     # nothing of it enters the history a request is rendered from, and it
     # names the message it was issued on, and why, so the turn can be drawn
-    # again. The backend's refusal is the one stream error that settles an
-    # attempt; anything else that ends a stream is thrown. Anything else is
-    # committed.
+    # again. The backend's refusals, read by their type, are the one kind of
+    # stream error that settles an attempt; anything else that ends a stream
+    # is thrown. Anything else is committed.
     _require_ordered(
         source,
         (
-            "streamError?.error instanceof RepeatedToolParameterRefusal",
+            "streamError?.error instanceof ServedTurnRefusalError",
+            "cause: streamError.error.refusal.cause,",
             "if (streamError && !servedRefusal) throw streamError.error;",
             ": deferredFinishReason === FinishReason.MAX_TOKENS",
             "const refused = refusal !== undefined;",
@@ -3155,10 +3156,15 @@ _NATIVE_TOOL_SOURCES: tuple[str, ...] = (
 
 # The keywords a JSON-Schema string constraint is spelled with. The served
 # engine compiles a declared tool schema into the grammar it constrains
-# generation with, and a length- or pattern-bounded string there cannot also
-# carry the `<parameter=` / `</parameter>` exclusions that keep a malformed
-# tool call ungenerable; it refuses such a parameter rather than dropping
-# them. `pattern` and `format` are matched only where a string value follows,
+# generation with. A string parameter is generated raw, with the `<parameter=`
+# / `</parameter>` exclusions that keep a malformed tool call ungenerable,
+# which a length- or pattern-bounded string cannot also carry, so the engine
+# refuses such a parameter rather than dropping them. A string inside a JSON
+# value is generated under XGrammar, which bounds its length and matches its
+# pattern over the characters between its quotes as written, not over its
+# value: a length-bounded string admits no escape and admits the raw control
+# characters JSON refuses, and a pattern can admit an unescaped quote.
+# `pattern` and `format` are matched only where a string value follows,
 # because `pattern` is also the name of a parameter two of these tools
 # declare.
 _STRING_CONSTRAINT = re.compile(
@@ -3171,7 +3177,8 @@ def _require_no_string_constraint(state: State, path: str, *, label: str) -> Non
     _require(
         match is None,
         f"{label}: {path} declares the JSON-Schema string constraint "
-        f"{match.group(0)!r} the served engine refuses. Delete the keyword "
+        f"{match.group(0)!r}, which the served engine refuses on a string "
+        f"parameter and generates wrongly inside a JSON value. Delete the keyword "
         f"from the declaration and enforce the bound in the tool's "
         f"validateToolParams, where the refusal can name the parameter and "
         f"the limit."
@@ -5978,24 +5985,84 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export const REFUSED_ANSWER =\n  'Your previous answer to this request was refused because';",
             "export function limitReached(limit: number, unfinished: string): string {",
             "  return `it reached its ${limit}-token limit before ${unfinished} was complete`;",
-            "export function limitReachedRefusal(limit: number, unfinished: string): string {",
-            "  return `${REFUSED_ANSWER} ${limitReached(limit, unfinished)}`;",
-            "export function turnRefusalNotice(limit: number): string {\n"
+            # Every turn's notice is one sentence shape in one envelope.
+            "function refusedTurnNotice(reason: string, advice: string): string {\n"
             "  return (\n"
             "    '<system-reminder>\\n' +\n"
-            "    `${limitReachedRefusal(limit, 'it')}, so it is not in this conversation and nothing it called was run. ` +\n"
-            "    'Reason more briefly, and do no more in one turn than fits within the limit: write a long file in parts, a turn each.' +\n"
+            "    `${REFUSED_ANSWER} ${reason}, so it is not in this conversation and nothing it called was run. ` +\n"
+            "    advice +\n"
             "    '\\n</system-reminder>'\n"
             "  );\n"
             "}",
+            "export function turnRefusalNotice(limit: number): string {\n"
+            "  return refusedTurnNotice(\n"
+            "    limitReached(limit, 'it'),\n"
+            "    'Reason more briefly, and do no more in one turn than fits within the limit: write a long file in parts, a turn each.',\n"
+            "  );\n"
+            "}",
+            # The backend's refusals of a turn are one declared table: each
+            # wire type with its cause, the name its recorded failure gives it
+            # and its notice, which carries no text the model wrote. The
+            # native certifier's build reads its wireType and recordedName
+            # lines from this file (protocol/engine/served_turn_refusals.rs).
+            "export const SERVED_TURN_REFUSALS = [\n"
+            "  {\n"
+            "    wireType: 'RepeatedToolParameterError',\n"
+            "    cause: 'repeated_tool_parameter',\n"
+            "    recordedName: 'RepeatedToolParameterRefusal',\n"
+            "    notice: refusedTurnNotice(\n"
+            "      'a tool call in it named one parameter more than once',\n"
+            "      'Name each parameter of a call once.',\n"
+            "    ),\n"
+            "  },\n"
+            "  {\n"
+            "    wireType: 'ToolCallOutsideSchemaError',\n"
+            "    cause: 'tool_call_outside_schema',\n"
+            "    recordedName: 'ToolCallOutsideSchemaRefusal',\n"
+            "    notice: refusedTurnNotice(\n"
+            "      \"a tool call in it had arguments its tool's schema does not admit\",\n"
+            "      \"Write each call's arguments to satisfy every constraint its tool's schema states.\",\n"
+            "    ),\n"
+            "  },\n"
+            "  {\n"
+            "    wireType: 'ToolCallUncarriableValueError',\n"
+            "    cause: 'tool_call_uncarriable_value',\n"
+            "    recordedName: 'ToolCallUncarriableValueRefusal',\n"
+            "    notice: refusedTurnNotice(\n"
+            "      'a tool call in it held an integer with more digits than can be converted, or a \\\\u escape that is half a surrogate pair',\n"
+            "      'Write no integer that long, and write each character whole.',\n"
+            "    ),\n"
+            "  },\n"
+            "] as const;",
             # A redraw's message is defined once: the notice for its cause, as
             # the harness's text, alone. The loops compose it here and the chat
             # admits it against this, so the two cannot disagree.
             "export function turnRefusalMessage(refusal: TurnRefusal): Part[] {",
-            "      return [authoredTextPart(harnessText(turnRefusalNotice(refusal.limit)))];",
-            "      return [authoredTextPart(harnessText(REPEATED_TOOL_PARAMETER_NOTICE))];",
+            "    return [authoredTextPart(harnessText(turnRefusalNotice(refusal.limit)))];",
+            "  return [authoredTextPart(harnessText(served.notice))];",
+            # Every notice is held within the widest the accounting of `A`
+            # charges.
+            "  ...SERVED_TURN_REFUSALS.map(({ notice }) => tokenizerText(notice).bytes),",
         ),
         label=label,
+    )
+    # The pipeline reads a refusal by the route and the type the backend gave
+    # it, never by its words, and hands every other served error on as served.
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    _require_ordered(
+        _source(state, pipeline, label=label),
+        (
+            "function servedTurnRefusal(error: unknown): unknown {\n"
+            "  if (!isServedStreamError(error)) return error;\n"
+            "  const refusal = servedTurnRefusalOfType(error.type);\n"
+            "  return refusal ? new ServedTurnRefusalError(refusal, error.message) : error;\n"
+            "}",
+            "      const error = servedTurnRefusal(caught);",
+            "      if (error instanceof ServedTurnRefusalError) {\n        throw error;\n      }",
+            "      if (isServedStreamError(error)) {\n        throw redactProxyError(error);\n      }",
+        ),
+        label=label,
+        location=pipeline,
     )
     for composer in (
         chat,
@@ -6003,16 +6070,35 @@ def _validate_compaction_budget_after(state: State) -> None:
         "packages/cli/src/nonInteractiveCli.ts",
         "packages/core/src/agents/runtime/agent-core.ts",
     ):
-        for restated in ("turnRefusalNotice(", "REPEATED_TOOL_PARAMETER_NOTICE"):
+        for restated in (
+            "turnRefusalNotice(",
+            "refusedTurnNotice(",
+            "SERVED_TURN_REFUSALS.",
+            "SERVED_TURN_REFUSALS[",
+        ):
             forbid_text(state, composer, restated, label=label)
     # The guard drives the message the loops compose through the real chat,
-    # pipeline and request serializer, each of which refuses any other.
-    require_text(
-        state,
-        "packages/core/src/core/geminiChat.test.ts",
+    # pipeline and request serializer, each of which refuses any other; and
+    # each of the backend's refusals, served inside the stream, through the
+    # same route to its redraw, while a 5xx ends the turn as a failure.
+    for name in (
         "admits the notice the reasoning loops compose, and sends it through the request serializer",
-        label=label,
-    )
+        "refuses a turn its backend refused inside the stream as $wireType, and admits and sends the notice the reasoning loops compose for it",
+        "ends a turn on a 5xx its backend served inside the stream, as the backend failure it is, with no turn to draw again",
+    ):
+        require_text(
+            state, "packages/core/src/core/geminiChat.test.ts", name, label=label
+        )
+    for name in (
+        "ends a stream its backend refused with $wireType as that refusal, recorded from its bytes, whatever the refusal names",
+        "ends a stream on any other error its backend served inside it, $type, as that error, never read by its text",
+    ):
+        require_text(
+            state,
+            "packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts",
+            name,
+            label=label,
+        )
     _require_all(
         state,
         service,
@@ -7453,7 +7539,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
         "answers a turn that reached its limit with the notice for the room its window gives a turn",
         "refuses no turn stopped by %s",
         "refuses no turn that has no terminal",
-        "is refused, and answered with the notice that names no text the model wrote",
+        "is refused as $cause, and answered with its notice, which names no text the model wrote",
         "ends a run of refusals with the backend refusal it ended on, and no numbers it did not serve",
         "names the prompt, the limit and the output, reasoning included, when a generation reached its limit",
         "names the call a limit stopped, what was served of it and where it is kept, and never calls it a text prefix",
@@ -7502,8 +7588,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
     for name in (
         "asks for the refused turn again, told why, as the next turn, and continues the run",
         "ends the run on the refusal that makes ${MAX_GENERATION_DRAWS} in a row, as error_incomplete_generation naming the limit",
-        "asks for a turn the backend refused again, told why as the runtime, and continues the run",
-        "ends the run on the refusal that makes ${MAX_GENERATION_DRAWS} in a row, of either cause, naming the last",
+        "asks for a turn the backend refused as $cause again, told why as the runtime, and continues the run",
+        "ends the run on an error the backend served that refuses no turn, a 5xx, and draws nothing again",
+        "ends the run on the refusal that makes ${MAX_GENERATION_DRAWS} in a row, of any cause, naming the last",
         "counts only refusals in a row: a turn that is not refused starts the count again",
         "charges every redraw to the turn budget before it is issued",
         "asks for a refused drain turn again in the drain loop, as a redraw of the same item",
@@ -7512,7 +7599,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
     for name in (
         "stops the agent at once when its generation was stopped for a reason other than its limit",
         "asks for a round refused at its limit again, told why, and stops the agent on the refusal that makes ${MAX_GENERATION_DRAWS} in a row",
-        "asks for a round the backend refused again, told why, and stops the agent on the refusal that makes ${MAX_GENERATION_DRAWS} in a row",
+        "asks for a round the backend refused as $cause again, told why, and stops the agent on the refusal that makes ${MAX_GENERATION_DRAWS} in a row",
         "takes the report from a redraw that ends on its own",
     ):
         require_text(

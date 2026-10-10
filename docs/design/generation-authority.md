@@ -66,12 +66,19 @@ number of observations the chat incorporated, and one disposition:
 - `accepted`: the turn entered history; its calls become executable.
 - `refused`: the turn is drawn again, and it has no executable call. Either
   the provider completed it at its output limit (finish `MAX_TOKENS`), or its
-  response ended in the backend's typed refusal (`RepeatedToolParameterError`)
-  with no finish and no served usage; the client records that response's
-  failure as `RepeatedToolParameterRefusal: ...` exactly when its bytes end in
-  the refusal's error payload, which both certifiers check. It never enters
-  history; the turn is drawn again on the same request with the refusal
-  notice added, up to `MAX_GENERATION_DRAWS`.
+  response ended in one of the backend's typed refusals with no finish and no
+  served usage. The refusals are declared once, in the client's
+  `SERVED_TURN_REFUSALS`, which the native certifier's build reads from the
+  reviewed client patch; each pairs the error payload's type with the name the
+  client records the failure under:
+  `RepeatedToolParameterError` as `RepeatedToolParameterRefusal: ...`,
+  `ToolCallOutsideSchemaError` as `ToolCallOutsideSchemaRefusal: ...` and
+  `ToolCallUncarriableValueError` as `ToolCallUncarriableValueRefusal: ...`.
+  The client records a response's failure under one of those names exactly
+  when its bytes end in that same refusal's error payload, which both
+  certifiers check; bytes that end in one refusal recorded as another are
+  refused. It never enters history; the turn is drawn again on the same
+  request with the refusal notice added, up to `MAX_GENERATION_DRAWS`.
 - `abandoned`: the attempt ended without a turn, for example a retried or
   cancelled stream. It is evidence only.
 

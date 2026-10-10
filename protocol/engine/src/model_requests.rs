@@ -265,14 +265,33 @@ fn nonstream_json_value(body: &[u8]) -> Option<serde_json::Value> {
     serde_json::from_str(&String::from_utf8_lossy(second)).ok()
 }
 
-/// The type the backend gives its refusal of a turn whose call names one
-/// parameter twice: an error payload ending the stream, after which the SDK
-/// yields nothing. The client's `REPEATED_TOOL_PARAMETER_ERROR`.
-const REPEATED_TOOL_PARAMETER_ERROR: &str = "RepeatedToolParameterError";
+/// One of the backend's refusals of a turn for what the model's call held:
+/// the type its error payload carries where it ends the stream, after which
+/// the SDK yields nothing, and the name the client gives a response that
+/// failed with it -- the outcome's error opens with that name and `": "`.
+pub(crate) struct ServedTurnRefusal {
+    pub wire_type: &'static str,
+    pub recorded_name: &'static str,
+}
 
-/// How the client names a response that failed with that refusal: its
-/// outcome's error opens with the client's `REPEATED_TOOL_PARAMETER_REFUSAL`.
-const REPEATED_TOOL_PARAMETER_REFUSAL: &str = "RepeatedToolParameterRefusal: ";
+// The backend's refusals of a turn -- a call that names one parameter twice,
+// a call whose arguments its tool's schema does not admit, a call holding a
+// value the backend cannot carry back into a prompt -- are the client's
+// `SERVED_TURN_REFUSALS`, which the build reads from the reviewed client patch
+// (`build.rs`, `served_turn_refusals.rs`): the certifier has no list of its
+// own. A response is refused by one of them exactly when its bytes and its
+// record name the same one.
+include!(concat!(env!("OUT_DIR"), "/served_turn_refusal_table.rs"));
+
+/// The refusal a response's recorded failure names, if any: the failure
+/// opens with its recorded name and `": "`.
+fn recorded_refusal(error: &str) -> Option<&'static ServedTurnRefusal> {
+    SERVED_TURN_REFUSALS.iter().find(|refusal| {
+        error
+            .strip_prefix(refusal.recorded_name)
+            .is_some_and(|rest| rest.starts_with(": "))
+    })
+}
 
 /// The lead every refusal notice opens with, the client's `REFUSED_ANSWER`
 /// (`generation-refusal.ts`, pinned by the transformer's contract). No
@@ -442,20 +461,30 @@ impl ResponseValues {
         }
     }
 
-    /// Whether a successful streamed body ends in the backend's refusal of
-    /// its turn right after the `seen` values the SDK yielded.
-    fn refused(&self, seen: u64, status: Option<u64>, transport_eof: bool) -> bool {
+    /// The backend's refusal of its turn that a successful streamed body
+    /// ends in right after the `seen` values the SDK yielded, if it ends in
+    /// one.
+    fn served_refusal(
+        &self,
+        seen: u64,
+        status: Option<u64>,
+        transport_eof: bool,
+    ) -> Option<&'static ServedTurnRefusal> {
         if !status.is_some_and(|status| (200..300).contains(&status)) {
-            return false;
+            return None;
         }
         match self {
             Self::Stream(values) => {
                 let settled = values.eof_tail(transport_eof);
-                settled.failed
-                    && settled.count == seen
-                    && settled.error_type.as_deref() == Some(REPEATED_TOOL_PARAMETER_ERROR)
+                if !settled.failed || settled.count != seen {
+                    return None;
+                }
+                let error_type = settled.error_type.as_deref()?;
+                SERVED_TURN_REFUSALS
+                    .iter()
+                    .find(|refusal| refusal.wire_type == error_type)
             }
-            Self::Nonstream(_) => false,
+            Self::Nonstream(_) => None,
         }
     }
 
@@ -2389,25 +2418,31 @@ impl ModelRequests {
                         "served usage differs from processed physical response bytes",
                     ));
                 }
-                // The client names a failure by the backend's refusal exactly
-                // when the bytes end in that refusal after the values it saw.
-                let failed = status == "failed";
-                let refused = failed
-                    && field(event, "error", line)?
-                        .as_str()
-                        .is_some_and(|error| error.starts_with(REPEATED_TOOL_PARAMETER_REFUSAL));
-                if refused
-                    != (failed
-                        && values.refused(
+                // The client names a failure by one of the backend's refusals
+                // exactly when the bytes end in that same refusal after the
+                // values it saw.
+                let (recorded, served) = if status == "failed" {
+                    (
+                        field(event, "error", line)?
+                            .as_str()
+                            .and_then(recorded_refusal),
+                        values.served_refusal(
                             sdk_values_seen,
                             state.http_status,
                             state.termination.as_deref() == Some("eof"),
-                        ))
+                        ),
+                    )
+                } else {
+                    (None, None)
+                };
+                if recorded.map(|refusal| refusal.wire_type)
+                    != served.map(|refusal| refusal.wire_type)
                 {
                     return Err(refusal(
                         "the response's recorded refusal differs from its physical bytes",
                     ));
                 }
+                let refused = recorded.is_some();
                 // Exact served usage is the client's only decode mode: a
                 // generation response (chat or utility-owned; `state.utility`
                 // marks a tokenizer or embedding call, which serves none)

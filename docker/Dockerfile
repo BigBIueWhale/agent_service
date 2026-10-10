@@ -139,6 +139,11 @@ COPY --from=qwen-build /src/node_modules /opt/qwen-code/node_modules
 COPY --from=qwen-build /src/package.json /opt/qwen-code/package.json
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY protocol protocol
+# The engine's build reads the backend's refusals of a turn where the client
+# declares them, in the reviewed client patch, so this stage holds the patch
+# the client above was built from, as qwen-build proved it.
+COPY --from=qwen-build /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch \
+  patches/qwen-code-0.21.12-agent-service.patch
 COPY src/bin/agent_exec.rs src/bin/agent_exec.rs
 COPY src/lib.rs src/deliverables.rs src/error.rs src/result_parse.rs src/serde_contract.rs src/stream_contract.rs src/
 COPY src/result_parse src/result_parse

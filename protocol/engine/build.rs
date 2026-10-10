@@ -8,6 +8,7 @@ mod json;
 #[path = "src/number.rs"]
 mod number;
 mod schema_compiler;
+mod served_turn_refusals;
 
 fn main() {
     let path = "../stream-contract-v21.json";
@@ -65,6 +66,36 @@ fn main() {
         generated,
     )
     .expect("write generated stream bindings");
+    fs::write(
+        output.join("served_turn_refusal_table.rs"),
+        served_turn_refusal_table(),
+    )
+    .expect("write the backend's refusals of a turn");
+}
+
+/// The certifier's table of the backend's refusals of a turn, read from the
+/// client's declaration of them in the reviewed client patch
+/// (`served_turn_refusals.rs`).
+fn served_turn_refusal_table() -> String {
+    let path = served_turn_refusals::PATCH;
+    println!("cargo:rerun-if-changed={path}");
+    let patch = fs::read_to_string(path).unwrap_or_else(|error| {
+        panic!("read the reviewed client patch {path}, where the client declares the backend's refusals of a turn: {error}")
+    });
+    let refusals = served_turn_refusals::read(&patch).unwrap_or_else(|cause| panic!("{cause}"));
+    let mut table = format!(
+        "/// The client's `SERVED_TURN_REFUSALS`, row for row, as the build read it\n\
+         /// from the reviewed client patch.\n\
+         pub(crate) static SERVED_TURN_REFUSALS: [ServedTurnRefusal; {}] = [\n",
+        refusals.len()
+    );
+    for (wire_type, recorded_name) in &refusals {
+        table.push_str(&format!(
+            "    ServedTurnRefusal {{ wire_type: {wire_type:?}, recorded_name: {recorded_name:?} }},\n"
+        ));
+    }
+    table.push_str("];\n");
+    table
 }
 
 /// The one terminal subtype whose record must carry `missing_deliverables`,

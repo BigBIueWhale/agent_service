@@ -969,8 +969,8 @@ stop_reason, usage}`): one block kind per message in production order --
 admitted generation, and the native certifier refuses any row that differs, is
 missing, is extra or is out of place. A `refused` turn is one the runtime draws again, with no
 executable call: the provider completed it at its output limit, or the backend
-refused it -- its response ended in the backend's typed refusal of a call that
-named one parameter twice, having served no terminal and no usage, so its last
+refused it -- its response ended in one of the backend's typed refusals of a
+call it would not publish, having served no terminal and no usage, so its last
 row carries none. It never enters history. An
 `abandoned` attempt is evidence only and shows no row. Assistant rows and
 partial `stream_event`s carry no origin field; a partial belongs to the latest
@@ -1220,21 +1220,32 @@ redraw, and nothing else joins it. Each draw is a turn: charged to the turn
 budget, billed, and recorded as it was served, the refused one with its
 `incomplete_tool_use` block and the notice as a `system`-authored record. A turn
 the backend refuses is drawn again the same way, on the same bound. The backend
-refuses a turn whose call names one parameter twice, which a call's arguments
-cannot hold, with a typed 422 inside the stream, `RepeatedToolParameterError`,
-naming the call and the parameter. Only a schema that leaves a level open can be
-written that way: a level declared closed reaches the backend closed, and its
-grammar admits each of its names once, in declared order, so in the locked run,
-whose tools are all closed, the refusal cannot come; it publishes no call and serves no usage, so
-nothing of the turn is made or billed, and the redraw is told, in the same
-envelope and voice, that a tool call in its answer named one parameter more than
-once and to name each once. The notice names neither, so it carries no text the
-model wrote. Four refused draws of a turn in a row, of either cause -- the bound
-every refused answer is drawn under, a compaction's snapshot draws included --
-end the run as `error_incomplete_generation`: a limit that keeps being reached is
-a turn that will not fit, or reasoning that has degenerated, a repeat that keeps
-being written is a call the model will not write once, and the run says so
-loudly rather than drawing again. Four is a cost bound, declared, not a
+refuses a turn whose call it will not publish with a typed 422 inside the
+stream, naming the call, of one of three types: `RepeatedToolParameterError`, a
+call that names one parameter twice, which a call's arguments cannot hold;
+`ToolCallOutsideSchemaError`, a call no reading of whose arguments its tool's
+schema admits, since the grammar does not hold every constraint a schema can
+state; and `ToolCallUncarriableValueError`, a call holding a value the backend
+cannot carry back into a prompt, an integer of more digits than it converts or
+a `\u` escape that is half a surrogate pair. Only a schema that leaves a level
+open can be written with a parameter twice: a level declared closed reaches the
+backend closed, and its grammar admits each of its names once, in declared
+order, so the locked run, whose tools are all closed, never meets the first. It
+can meet the other two: `todo_write` declares a todo's `blockedBy` references
+distinct, which no grammar can hold for ids the model chooses, and any call
+carrying a number or a JSON value can hold a value no prompt can carry. Each
+publishes no call and serves no usage, so nothing of the turn is made or
+billed, and the redraw is told, in the same envelope and voice, why the backend
+refused it and what to do instead. The notice names neither the call nor what
+it held, so it carries no text the model wrote. The client reads the refusal by
+its type alone; any other error the backend serves inside the stream, a 5xx
+among them, is the backend's own failure and ends the run as
+`error_during_execution`. Four refused draws of a turn in a row, of any cause
+-- the bound every refused answer is drawn under, a compaction's snapshot draws
+included -- end the run as `error_incomplete_generation`: a limit that keeps
+being reached is a turn that will not fit, or reasoning that has degenerated, a
+call the backend keeps refusing is one the model will not write as its tool
+admits, and the run says so loudly rather than drawing again. Four is a cost bound, declared, not a
 measured rate: four draws of a turn generate at most 4 × 40,960 = 163,840
 tokens, at most 3,413 seconds each at the decode floor below, and their three
 notices hold 1,212 tokens of `A` back from both bounds, 404 for each draw

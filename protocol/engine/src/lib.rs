@@ -18,6 +18,10 @@ pub mod usage;
 #[cfg(test)]
 #[path = "../schema_compiler.rs"]
 mod schema_compiler;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../served_turn_refusals.rs"]
+mod served_turn_refusals;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(tag = "state", content = "cause", rename_all = "snake_case")]

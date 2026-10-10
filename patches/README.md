@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `470a72c32627ecab7b1a9d3152145c9570f9af5d5fb47f046cddce0048249879`
+- Review-diff SHA-256: `a3a94fd3204d8c33cb95002b73c311f7b5234cd80cc6e49b8c2bbc7d75d65075`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `824442b4862067da9b448fbb4ae5dd30c9640d6c111677a0aa9b084b35833dba`
+- Transformer-manifest SHA-256: `23811d551b14750f9abe361151c33b0cde65b4173145382102c6f00eea9ee3ce`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -109,19 +109,31 @@ repeated an id within its turn and record that it had, meets no repeat either.
 A refused turn is drawn again, told why, as the next turn, in the headless
 session and every subagent alike, the way a refused compaction draw is drawn
 again. A turn is refused for reaching its limit, or because the backend refused
-it: a call that names one parameter twice is answered with the backend's typed
-refusal, `RepeatedToolParameterError`, inside the stream, which publishes no
-call and serves no usage. Only a schema that leaves a level open can be written
-that way -- an MCP server's, or a tool here that does not close its own --
-since a closed level reaches the backend closed and its grammar admits each name
-once; the locked run declares only closed tools, so there it cannot come. The chat names the message the refused draw answered,
+it: a call the backend will not publish is answered with one of its typed
+refusals inside the stream, which publishes no call and serves no usage --
+`RepeatedToolParameterError`, a call that names one parameter twice;
+`ToolCallOutsideSchemaError`, a call whose arguments its tool's schema does not
+admit; `ToolCallUncarriableValueError`, a call holding an integer of more
+digits than the backend converts or a `\u` escape that is half a surrogate
+pair. The client reads each by its type, declared once in
+`SERVED_TURN_REFUSALS`, and any other error served inside the stream ends the
+run. Only a schema that leaves a level open can be written with a parameter
+twice -- an MCP server's, or a tool here that does not close its own -- since a
+closed level reaches the backend closed and its grammar admits each name once,
+so the locked run, which declares only closed tools, never meets that one; it
+can meet the other two, since `todo_write` declares its `blockedBy` references
+distinct, which no grammar can hold for ids the model chooses, and any number
+or JSON value can hold a value no prompt can carry. The chat names the message the refused draw answered,
 and why it was refused, and admits one kind of send against it,
 `redrawRefusedTurn`: its whole message is the refusal notice for that cause, in
 upstream's `<system-reminder>` envelope and in the voice a refused compaction
 draw is told in -- the answer reached its limit before it was complete, or a
-tool call in it named one parameter more than once; it is not in the
-conversation and ran nothing; and the next should reason more briefly and write
-a long file in parts, or name each parameter once -- and it joins the
+tool call in it named one parameter more than once, had arguments its tool's
+schema does not admit, or held an integer too long to convert or half a
+surrogate pair; it is not in the conversation and ran nothing; and the next
+should reason more briefly and write a long file in parts, name each parameter
+once, satisfy every constraint its tool's schema states, or write no integer
+that long and each character whole -- and it joins the
 conversation on that message, so the redraw is the refused request with the
 notice added, rendered from the history as every request is, never compacted in
 between and joined by no reminder, context or hook. That message is defined
