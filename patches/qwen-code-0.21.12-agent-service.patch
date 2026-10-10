@@ -297342,7 +297342,7 @@ new file mode 100644
 +    // cut, which is what the scheduler seam does; nothing claims it is
 +    // replaced whole by a notice.
 +    expect(rendered).toContain(
-+      `- One inline block is at most ${PARTITION.inlineBlockTokens} tokens. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \`read_file\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,
++      `- One inline block is at most ${PARTITION.inlineBlockTokens} tokens. A tool result's text is held to one inline block, and an image a result carries to the most one image renders to. A longer text keeps its start and its end, and a notice where its middle was cut states its true total and the \`read_file\` call that reads the cut lines, a page at a time, from a copy of the whole kept for the session, or why no copy could be kept.`,
 +    );
 +    expect(rendered).not.toContain('Nothing is lost');
 +    expect(rendered).not.toContain('the notice that replaces it');
@@ -297739,7 +297739,7 @@ new file mode 100644
 +    `- One turn may generate at most ${turn}, and that total includes the reasoning you do before answering. A turn that reaches it is refused rather than truncated: it is not kept, nothing it called is run, and it is asked for again, told why, as the next turn. ${MAX_GENERATION_DRAWS} refusals in a row end the session.`,
 +    `- This session may run at most ${turns}. Reaching that number ends the session.`,
 +    '- One tool call per turn. There is no parallel dispatch; issue independent work as successive turns.',
-+    `- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \`read_file\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,
++    `- One inline block is at most ${block}. A tool result's text is held to one inline block, and an image a result carries to the most one image renders to. A longer text keeps its start and its end, and a notice where its middle was cut states its true total and the \`read_file\` call that reads the cut lines, a page at a time, from a copy of the whole kept for the session, or why no copy could be kept.`,
 +    '- A `read_file` page and the statement that leads it are one inline block together.',
 +    `- ${compactionDeclaration(trigger, snapshot)}`,
 +    '- Do not reconstruct or persist hidden reasoning outside model history.',
@@ -301978,8 +301978,8 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * the bound, and the text it bounds changes only with the client.
 + *
 + * The capacity is that text's measured worst case with room to grow. The
-+ * proof counts the main session's to 11,647 through the served template and
-+ * tokenizer, and 12,288 is the next multiple of 1,024 above it: the 641 left
++ * proof counts the main session's to 11,691 through the served template and
++ * tokenizer, and 12,288 is the next multiple of 1,024 above it: the 597 left
 + * are what the prompt and the declarations may grow by before the proof
 + * refuses them at startup, naming them. Nothing in it grows with the
 + * window, so no window holds back more for it.
@@ -347067,7 +347067,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    expect(declaration).toContain('At 185344 tokens the next send compacts');
 +    expect(declaration).toContain('call `state_snapshot` with its sections');
 +    expect(declaration).toContain(
-+      'a `<state_snapshot>` block of at most 32768 tokens',
++      'a `<state_snapshot>` block of at most 32768 tokens beside the original inputs, which stand verbatim',
 +    );
 +    // A compaction is one attempt: its failure ends the session.
 +    expect(
@@ -347870,7 +347870,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 +    `At ${trigger} the next send compacts the conversation, and you write the snapshot it keeps: ` +
 +    `a request of its own, not a turn, gives you the prompt the last turn was issued against and asks you to call \`${STATE_SNAPSHOT_FUNCTION_NAME}\` with its sections. ` +
 +    `After the startup context the conversation began with, what you write in each section then stands exactly as you wrote it ` +
-+    `between that section's tags in a \`<state_snapshot>\` block of at most ${snapshot}, the original inputs verbatim in its \`${RETAINED_INPUTS_ELEMENT}\` element, ` +
++    `between that section's tags in a \`<state_snapshot>\` block of at most ${snapshot} beside the original inputs, which stand verbatim in its \`${RETAINED_INPUTS_ELEMENT}\` element, ` +
 +    `followed by: "${RESUME_TRAILER}" ` +
 +    'That turn is carried verbatim behind it, and the work continues. ' +
 +    'A compaction that fails ends the session.'
@@ -365528,6 +365528,181 @@ new file mode 100644
 +
 +    childWriting([utf8('a genuine \ufffd here\n')]);
 +    expect(await run(false)).toBe('a genuine \ufffd here');
++  });
++});
+diff --git a/packages/core/src/services/shellExecutionService.rendering.test.ts b/packages/core/src/services/shellExecutionService.rendering.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/core/src/services/shellExecutionService.rendering.test.ts
+@@ -0,0 +1,170 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++/**
++ * The shell tool's description tells the model, at its first turn, how a
++ * command's output is shown. This holds each clause of what it says to what
++ * the service shows, through the service's own decoding and replay terminal,
++ * each written where a line goes on after it, so that the trim at the
++ * output's end cannot pass for a rule about every line. Only the processes it
++ * reads from are fakes, as in shellExecutionService.encoding.test.ts.
++ */
++import EventEmitter from 'node:events';
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++import type { Config } from '../config/config.js';
++import { ShellTool } from '../tools/shell.js';
++import { ShellExecutionService } from './shellExecutionService.js';
++
++const mockPtySpawn = vi.hoisted(() => vi.fn());
++const mockCpSpawn = vi.hoisted(() => vi.fn());
++vi.mock('../utils/getPty.js', () => ({
++  getPty: async () => ({
++    module: { spawn: mockPtySpawn },
++    name: 'lydell-node-pty',
++  }),
++}));
++vi.mock('node:child_process', async (importOriginal) => ({
++  ...(await importOriginal<typeof import('node:child_process')>()),
++  spawn: mockCpSpawn,
++}));
++
++function ptyWriting(bytes: string) {
++  mockPtySpawn.mockImplementation(() => {
++    let exit: ((event: { exitCode: number }) => void) | undefined;
++    return Object.assign(new EventEmitter(), {
++      pid: 4242,
++      kill: vi.fn(),
++      resize: vi.fn(),
++      write: vi.fn(),
++      onData: (listener: (data: Buffer) => void) => {
++        setImmediate(() => {
++          listener(Buffer.from(bytes, 'utf8'));
++          setImmediate(() => exit?.({ exitCode: 0 }));
++        });
++        return { dispose: () => undefined };
++      },
++      onExit: (listener: (event: { exitCode: number }) => void) => {
++        exit = listener;
++        return { dispose: () => undefined };
++      },
++    });
++  });
++}
++
++function childWriting(bytes: string) {
++  mockCpSpawn.mockImplementation(() => {
++    const child = Object.assign(new EventEmitter(), {
++      pid: 4343,
++      exitCode: null,
++      signalCode: null,
++      kill: vi.fn(),
++      stdout: new EventEmitter(),
++      stderr: new EventEmitter(),
++    });
++    setImmediate(() => {
++      child.stdout.emit('data', Buffer.from(bytes, 'utf8'));
++      setImmediate(() => child.emit('exit', 0, null));
++    });
++    return child;
++  });
++}
++
++async function shown(bytes: string, pty: boolean): Promise<string> {
++  (pty ? ptyWriting : childWriting)(bytes);
++  const handle = await ShellExecutionService.execute(
++    'command',
++    '/',
++    () => undefined,
++    new AbortController().signal,
++    pty,
++    { terminalWidth: 80, terminalHeight: 24 },
++  );
++  return (await handle.result).output;
++}
++
++/** The clauses of the description's output sentence, as the model reads them. */
++function clausesOf(pty: boolean): string[] {
++  const config = { getShouldUseNodePtyShell: () => pty } as unknown as Config;
++  const description = new ShellTool(config, {
++    declaredTools: new Set<string>(),
++    interactionMode: 'headless',
++  } as never).description;
++  const lead = pty
++    ? 'its output is shown as that terminal displays it: '
++    : "A command's output is shown with ";
++  const start = description.indexOf(lead);
++  expect(start).toBeGreaterThanOrEqual(0);
++  const end = description.indexOf('. To see ', start);
++  return description
++    .slice(start + lead.length, end)
++    .split(/, and |, | and /)
++    .map((clause) => clause.trim());
++}
++
++// What each clause the description may state does, written where a line goes
++// on after it (`atEnd: false`), so the trim at the output's end cannot pass
++// for a rule about every line.
++type Witness = { written: string; shown: string; followed?: string };
++const PTY: Record<string, Witness> = {
++  'escape sequences applied': {
++    written: '\u001b[1mbold\u001b[0m and \u001b[2Cmoved\n',
++    shown: 'bold and   moved',
++  },
++  "tabs expanded to spaces at the terminal's tab stops but dropped at the end of a line":
++    { written: 'a\tb\nc\t\n', shown: 'a       b\nc' },
++  'a carriage return letting later text overwrite its line': {
++    written: 'abcdef\rxy\n',
++    shown: 'xycdef',
++  },
++  'anything the program cleared gone': {
++    written: 'before\n\u001b[H\u001b[2J\u001b[3Jafter\n',
++    shown: 'after',
++  },
++  'the whitespace at the end of the output trimmed': {
++    written: 'end   \n\n\n',
++    shown: 'end',
++    followed: 'end   \n\n\nnext',
++  },
++};
++const CHILD: Record<string, Witness> = {
++  'its escape sequences removed': {
++    written: '\u001b[31mred\u001b[0m x\n',
++    shown: 'red x',
++  },
++  'the whitespace around it trimmed': {
++    written: '\n  out  \n\n',
++    shown: 'out',
++    followed: 'out  \n\nnext',
++  },
++};
++
++describe("a command's output, as the shell tool's description says it is shown", () => {
++  beforeEach(() => {
++    mockPtySpawn.mockReset();
++    mockCpSpawn.mockReset();
++  });
++
++  for (const [pty, witnesses] of [
++    [true, PTY],
++    [false, CHILD],
++  ] as const) {
++    it(`shows ${pty ? 'a pty' : 'a child process'} command's output as each clause of the description says, a line going on after it`, async () => {
++      expect(clausesOf(pty)).toEqual(Object.keys(witnesses));
++      for (const [clause, w] of Object.entries(witnesses)) {
++        expect(await shown(w.written, pty), clause).toBe(w.shown);
++        expect(
++          await shown(w.written + 'next\n', pty),
++          `${clause}, a line after it`,
++        ).toBe(w.followed ?? `${w.shown}\nnext`);
++      }
++    });
++  }
++
++  it('keeps the spaces a command wrote at the end of a line that is not the last', async () => {
++    expect(await shown('abc   \nnext\n', true)).toBe('abc   \nnext');
++    expect(await shown('abc   \nnext\n', false)).toBe('abc   \nnext');
 +  });
 +});
 diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages/core/src/services/shellExecutionService.test.ts
@@ -386314,7 +386489,7 @@ diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages
  - The command argument is required.
  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
  - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-+- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see the exact bytes, redirect the output to a file and read it with read_file.
++- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.
  
  - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
    - File search: Use glob (NOT find or ls)
@@ -386343,7 +386518,7 @@ diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages
  - The command argument is required.
  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
  - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-+- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see the exact bytes, redirect the output to a file and read it with read_file.
++- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.
  
  - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
    - File search: Use glob (NOT find or ls)
@@ -393590,7 +393765,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 -    (this as { description: string }).description = baseDescription;
 +    const foregroundOnlyDescription = `Delegate a bounded piece of work to one built-in subagent and wait for its report.
 +
-+- **general-purpose**: bounded research or implementation with the inherited tool surface.
++- **general-purpose**: bounded research or implementation with your tools but \`${ToolNames.AGENT}\` and \`${ToolNames.TODO_WRITE}\`.
 +- **Explore**: evidence-oriented investigation with private scratch and journaled workspace effects.
 +
 +Give a detailed, self-contained prompt -- the subagent cannot see your conversation -- and verify anything load-bearing in its report. It runs under its own turn budget, as many turns as yours; exhausting that budget ends its run with the assignment marked unfinished. Sequential and foreground only: background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable.`;
@@ -412684,13 +412859,13 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 +      expect(
 +        new ShellTool(mockConfig, INTERACTIVE_SESSION).description,
 +      ).toContain(
-+        "- A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops, each line's trailing spaces dropped, a carriage return letting later text overwrite its line, and anything the program cleared gone. To see the exact bytes, redirect the output to a file and read it with read_file.",
++        "- A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops but dropped at the end of a line, a carriage return letting later text overwrite its line, anything the program cleared gone, and the whitespace at the end of the output trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.",
 +      );
 +      vi.mocked(mockConfig.getShouldUseNodePtyShell).mockReturnValue(false);
 +      expect(
 +        new ShellTool(mockConfig, INTERACTIVE_SESSION).description,
 +      ).toContain(
-+        "- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see the exact bytes, redirect the output to a file and read it with read_file.",
++        "- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.",
 +      );
 +    });
 +
@@ -414123,7 +414298,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 +  runsInTerminal: boolean,
 +): string {
 +  const outputRendering = runsInTerminal
-+    ? "A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops, each line's trailing spaces dropped, a carriage return letting later text overwrite its line, and anything the program cleared gone."
++    ? "A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops but dropped at the end of a line, a carriage return letting later text overwrite its line, anything the program cleared gone, and the whitespace at the end of the output trimmed."
 +    : "A command's output is shown with its escape sequences removed and the whitespace around it trimmed.";
    const shellConfiguration = getShellConfiguration();
    const executionWrapper = getShellExecutionWrapper(shellConfiguration);
@@ -414143,7 +414318,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  - The command argument is required.
  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
  - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-+- ${outputRendering} To see the exact bytes, redirect the output to a file and read it with ${ToolNames.READ_FILE}.
++- ${outputRendering} To see it without that rendering, redirect the output to a file and read it with ${ToolNames.READ_FILE}.
  
  - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
    - File search: Use ${ToolNames.GLOB} (NOT find or ls)

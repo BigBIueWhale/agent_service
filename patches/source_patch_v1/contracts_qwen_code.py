@@ -1402,7 +1402,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "export function refuseRestatedQuantities(",
             "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n      snapshot,\n    ],",
             "refuseRestatedQuantities(prompt, context.quantities);",
-            "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
+            "`- One inline block is at most ${block}. A tool result's text is held to one inline block, and an image a result carries to the most one image renders to. A longer text keeps its start and its end, and a notice where its middle was cut states its true total and the \\`read_file\\` call that reads the cut lines, a page at a time, from a copy of the whole kept for the session, or why no copy could be kept.`,",
             "'- A `read_file` page and the statement that leads it are one inline block together.',",
             # Every bound the model is told is in tokens, the unit the window
             # is spent in: one inline block, a snapshot and the trigger at
@@ -1483,10 +1483,10 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             # The result is the terminal's rendering of what a command wrote,
             # not its bytes, and the description says so where the model
             # reads it, as the configured shell shows it, with the way to see
-            # the bytes.
-            "its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops, each line's trailing spaces dropped, a carriage return letting later text overwrite its line, and anything the program cleared gone.",
-            "A command's output is shown with its escape sequences removed and the whitespace around it trimmed.",
-            "- ${outputRendering} To see the exact bytes, redirect the output to a file and read it with ${ToolNames.READ_FILE}.",
+            # it without that rendering. What each clause says is held to what
+            # the service shows by the rendering test required below, not by
+            # the sentence's presence here.
+            "- ${outputRendering} To see it without that rendering, redirect the output to a file and read it with ${ToolNames.READ_FILE}.",
             "(this.session.declaredTools.has(ToolNames.MONITOR)\n"
             "                  ? 'For streaming events (watching logs, polling APIs), use the Monitor tool. '\n"
             "                  : '') +",
@@ -1499,6 +1499,11 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         ),
         label=label,
     )
+    _require_all(state, "packages/core/src/services/shellExecutionService.rendering.test.ts", (
+        "shows ${pty ? 'a pty' : 'a child process'} command's output as each clause of the description says, a line going on after it",
+        "keeps the spaces a command wrote at the end of a line that is not the last",
+        "expect(clausesOf(pty)).toEqual(Object.keys(witnesses));",
+    ), label=label)
     for retired in (
         "(text, any mode)",
         "work in every mode.",

@@ -724,12 +724,11 @@ A terminal conversation and a headless conversation share the same obligations:
   output as UTF-8, the encoding of the terminal the command writes to, never as
   an encoding guessed from the bytes, and states how many bytes were not UTF-8 —
   each sequence shown as U+FFFD — and the command that shows them. What it
-  shows is the terminal's rendering, not the bytes: escape sequences applied,
-  tabs expanded to spaces, each line's trailing spaces dropped, a carriage
-  return letting later text overwrite its line, and anything the program
-  cleared gone. The shell tool's description tells the model so, and how to
-  see the exact bytes, so text it copies from a command's output into an
-  `edit` is not taken for the file's.
+  shows is the terminal's rendering, not the bytes. The shell tool's
+  description tells the model so, clause by clause, and how to see the output
+  without that rendering, so text it copies from a command's output into an
+  `edit` is not taken for the file's; each clause it states is held to what the
+  service shows by `shellExecutionService.rendering.test.ts`.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
   request advertises one function whose closed parameter schema is the sections
   of upstream's `<state_snapshot>` block but `all_user_messages`, which the
