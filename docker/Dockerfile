@@ -57,6 +57,8 @@ COPY docker/scripts/npm_lock_package_set.py \
   /opt/agent-artifacts/scripts/npm_lock_package_set.py
 COPY docker/tests/test_npm_lock_package_set.py \
   /opt/agent-artifacts/scripts/test_npm_lock_package_set.py
+COPY docker/scripts/run_test_selection.py \
+  /opt/agent-artifacts/scripts/run_test_selection.py
 # The sealed output-language rule is the file upstream writes when a start with
 # no language set finds none. The build has upstream's writer produce it in an
 # empty home and refuses the image unless the sealed bytes are those.
@@ -66,9 +68,9 @@ COPY docker/config/output-language.md \
 # at an exact digest; its digest is proved again here, so this build trusts the
 # base's bytes no further than it trusts anything else it is given.
 # The build then runs, with Vitest in its owning package, every patched test
-# file and the test beside every patched source file. Desktop is not part of
-# this image and its suites run under Bun (`bun:test`), which the image does
-# not carry, so they are not selected; nothing in this build executes them.
+# file and the test beside every patched source file, and ends in that
+# selection's one verdict (docker/scripts/run_test_selection.py, which says what
+# is and is not selected and why).
 RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
       "${QWEN_SOURCE_ARCHIVE_SHA256}" \
  && test "$(sha256sum /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch | cut -d' ' -f1)" = \
@@ -124,43 +126,7 @@ RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && npx --no-install vitest run --config scripts/tests/vitest.config.ts \
       scripts/tests/package-assets.test.js \
       scripts/tests/stream-contract-assets.test.js \
- && PYTHONPATH=/opt/agent-artifacts python3 -c \
-      'from patches.source_patch_v1.generated_qwen_code_stage import FINAL_FILES; print("\n".join(sorted(path for path, digest in FINAL_FILES.items() if digest is not None)))' \
-      > /tmp/patched-files.txt \
- && grep -E '\.test\.tsx?$' /tmp/patched-files.txt > /tmp/patched-tests.txt \
- && grep -vE '\.test\.tsx?$' /tmp/patched-files.txt \
-      | grep -E '\.tsx?$' \
-      | sed -E 's/\.(tsx?)$/.test.\1/' > /tmp/adjacent-tests.txt \
- && while read -r f; do \
-      test -f "/src/$f" \
-        || { echo "patched test file is missing from the tree: $f"; exit 1; }; \
-    done < /tmp/patched-tests.txt \
- && { while read -r f; do \
-        test -f "/src/$f" && echo "$f"; \
-      done < /tmp/adjacent-tests.txt || true; } > /tmp/adjacent-present.txt \
- && sort -u /tmp/patched-tests.txt /tmp/adjacent-present.txt \
-      | grep -v -e '^integration-tests/' -e '^packages/desktop/' \
-      > /tmp/qwen-test-files.txt \
- && test -s /tmp/qwen-test-files.txt \
- && echo "executing $(wc -l < /tmp/qwen-test-files.txt) test files in full:" \
- && cat /tmp/qwen-test-files.txt \
- && : > /tmp/qwen-test-pairs.txt \
- && while read -r f; do \
-      package="$(dirname "$f")"; \
-      while [ "$package" != "." ] && [ ! -f "/src/$package/package.json" ]; do \
-        package="$(dirname "$package")"; \
-      done; \
-      test -f "/src/$package/package.json" \
-        || { echo "no package owns the test file: $f"; exit 1; }; \
-      printf '%s\t%s\n' "$package" "$f" >> /tmp/qwen-test-pairs.txt; \
-    done < /tmp/qwen-test-files.txt \
- && cut -f1 /tmp/qwen-test-pairs.txt | sort -u > /tmp/qwen-test-packages.txt \
- && while read -r package; do \
-      (cd "/src/$package" \
-        && awk -F'\t' -v p="$package" '$1 == p { print substr($2, length(p) + 2) }' \
-             /tmp/qwen-test-pairs.txt \
-          | xargs npx --no-install vitest run) || exit 1; \
-    done < /tmp/qwen-test-packages.txt \
+ && python3 /opt/agent-artifacts/scripts/run_test_selection.py /opt/agent-artifacts /src \
  && test "$(node dist/cli.js --version)" = '0.21.12' \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 
@@ -331,18 +297,21 @@ ARG BROKER_SOURCE_SHA256
 ARG CAPTURE_SOURCE_SHA256
 ARG RELAY_SOURCE_SHA256
 WORKDIR /build
-COPY Cargo.toml Cargo.lock ./
-COPY .dockerignore ./
-COPY build.rs ./
-COPY protocol protocol
-COPY docker/Dockerfile docker/Dockerfile
-COPY scripts/generate-protocol-bindings.mjs scripts/generate-protocol-bindings.mjs
-COPY config/stack.lock.json config/stack.lock.json
-COPY config/agent-runtime-contract-v1.json config/agent-runtime-contract-v1.json
-COPY docker/config/settings.json docker/config/settings.json
-COPY config/broker-policy-v1.json config/broker-policy-v1.json
-COPY src src
-COPY docker/tests docker/tests
+# The service's tests run here in the tree the host's `cargo test --workspace`
+# runs in: every build input. A test may read any of them -- the two that hold
+# the service's prompt and image bounds to the client's partition read the
+# reviewed client patch -- so the stage holds them all, never a list of the ones
+# some test is known to need. What the build inputs are is the sealed manifest,
+# which ./build.sh has proved this checkout is (check_pinned_inputs): the tree
+# is made of exactly the files it lists, each checked against its digest, so
+# nothing else the context carries -- a cache a tool keeps beside the sources
+# and ignores by its own .gitignore, say -- is in it.
+COPY . /context/
+RUN cd /context \
+ && sha256sum --check --strict --quiet config/build-inputs.sha256 \
+ && cut -c67- config/build-inputs.sha256 | tr '\n' '\0' \
+      | xargs -0 cp --parents --preserve=mode -t /build \
+ && rm -rf /context
 RUN test "$(rustc --version)" = 'rustc 1.95.0 (59807616e 2026-04-14)' \
  && test "$(sha256sum config/broker-policy-v1.json | cut -d' ' -f1)" = "${BROKER_POLICY_SHA256}" \
  && test "$(sha256sum src/bin/docker_broker.rs | cut -d' ' -f1)" = "${BROKER_SOURCE_SHA256}" \

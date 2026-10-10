@@ -20,28 +20,19 @@ function recordInput(path) {
     .update(readFileSync(`/build/${path}`))
     .digest("hex");
 }
-function recordTree(path) {
-  for (const entry of readdirSync(`/build/${path}`, { withFileTypes: true })) {
-    const child = `${path}/${entry.name}`;
-    if (entry.isDirectory()) recordTree(child);
-    else if (entry.isFile()) recordInput(child);
+// The executables were compiled in /build, which holds the build inputs and
+// what cargo wrote under target/; every other file is an input, recorded here
+// so the host can compare the whole tree with its sealed manifest.
+function recordTree(prefix) {
+  for (const entry of readdirSync(`/build/${prefix}`, { withFileTypes: true })) {
+    const child = `${prefix}${entry.name}`;
+    if (entry.isDirectory()) {
+      if (child !== "target") recordTree(`${child}/`);
+    } else if (entry.isFile()) recordInput(child);
     else throw new Error(`Unsupported compilation input ${child}`);
   }
 }
-for (const path of [
-  "Cargo.toml",
-  "Cargo.lock",
-  ".dockerignore",
-  "build.rs",
-  "docker/Dockerfile",
-  "scripts/generate-protocol-bindings.mjs",
-  "config/stack.lock.json",
-  "config/broker-policy-v1.json",
-  "config/agent-runtime-contract-v1.json",
-  "docker/config/settings.json",
-])
-  recordInput(path);
-for (const path of ["src", "protocol", "docker/tests"]) recordTree(path);
+recordTree("");
 for (const name of expected) {
   const matches = messages.filter(
     (message) =>

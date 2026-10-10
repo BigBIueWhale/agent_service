@@ -78,7 +78,7 @@ let prompt = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => { prompt += chunk; });
 process.stdin.on('end', () => {
-  const path = /^Read (.+) with read_file/.exec(prompt)?.[1];
+  const path = /^ *Read (.+) with read_file/.exec(prompt)?.[1];
   if (!path) process.exit(18);
   const proof = readFileSync(path, 'utf8').trim();
   if (!/^[a-f0-9]{32}$/.test(proof) || prompt.includes(proof) || path.includes(proof)) process.exit(19);

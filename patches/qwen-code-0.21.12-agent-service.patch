@@ -476355,7 +476355,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenAgentManager.ts b/pa
 diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts b/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts
 --- a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts
 +++ b/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts
-@@ -1,17 +1,20 @@
+@@ -1,17 +1,21 @@
  /**
   * @license
   * Copyright 2026 Qwen Team
@@ -476370,13 +476370,14 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.t
  import { resetEnvBootstrapForTesting } from '../utils/paths.js';
 +import { CHAT_RECORDING_VERSION } from '@qwen-code/qwen-code-core/transcriptRecords';
 +import { getProjectHash, sanitizeCwd } from '@qwen-code/qwen-code-core';
++import { harnessFullBody } from '@qwen-code/qwen-code-core/src/test-utils/model-generation-fixture.js';
  import { QwenSessionReader } from './qwenSessionReader.js';
  
  const originalRuntimeDir = process.env['QWEN_RUNTIME_DIR'];
  let runtimeDir: string;
  
  beforeEach(() => {
-@@ -27,23 +30,163 @@
+@@ -27,23 +31,163 @@
      delete process.env['QWEN_RUNTIME_DIR'];
    }
    resetEnvBootstrapForTesting();
@@ -476541,7 +476542,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.t
          message: {
            role: 'user',
            parts: [{ text: 'expanded model prompt' }, { text: taggedContext }],
-@@ -53,17 +196,112 @@
+@@ -53,17 +197,112 @@
            hookContext: 'hook-only context',
          },
        })}\n`,
@@ -476607,7 +476608,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.t
 +          },
 +          body_sha256: createHash('sha256').update(body).digest('hex'),
 +          body_bytes: Buffer.byteLength(body),
-+          body: { kind: 'full', json: body },
++          body: harnessFullBody(body),
 +        },
 +      },
 +    ];

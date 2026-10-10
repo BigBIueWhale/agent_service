@@ -163,11 +163,15 @@ class StubHandler(BaseHTTPRequestHandler):
             require(body["model"] == self.server.model, "model identity changed")
             if self.path == "/tokenize":
                 if "prompt" in body:
-                    # Two raw prompts reach the provider: the launcher's tokenizer preflight, and the
-                    # startup proof's framing probe, a text alone with no template and special tokens off.
+                    # A text counted alone is the launcher's tokenizer preflight, or one of the counts
+                    # the client makes of a text by itself -- the startup proof's framing probe, and
+                    # each statement and page a read_file result is bounded by -- which it sends with
+                    # no template and special tokens off. Which texts the client counts is the
+                    # headless qualification's to hold; this gate composes the final images.
                     require(body["prompt"] == "agent-service-tokenizer-preflight"
-                            or (body["prompt"] == "framing" and body.get("add_special_tokens") is False),
-                            "unknown raw prompt")
+                            or body.get("add_special_tokens") is False,
+                            "a text count that is neither the launcher's preflight nor a template-free "
+                            "count with special tokens off")
                     response = {"count": 1, "tokens": [42], "max_model_len": 262144}
                 else:
                     require(isinstance(body["messages"], list) and body["messages"], "sizing lacks messages")
@@ -270,18 +274,20 @@ def prepare_artifacts(source, artifact_path, destination):
     require(set(manifest) == {"v", "artifacts", "inputs"} and manifest["v"] == 1 and
             set(manifest["artifacts"]) == {"agent_service", "docker_broker", "session_capture"},
             "test executable manifest is incomplete")
-    input_paths = {
-        "Cargo.toml", "Cargo.lock", ".dockerignore", "build.rs", "docker/Dockerfile",
-        "scripts/generate-protocol-bindings.mjs", "config/stack.lock.json",
-        "config/broker-policy-v1.json", "config/agent-runtime-contract-v1.json",
-        "docker/config/settings.json",
-    }
-    for directory in ("src", "protocol", "docker/tests"):
-        input_paths.update(str(path.relative_to(source)) for path in (source / directory).rglob("*")
-                           if path.is_file() and "__pycache__" not in path.parts and path.suffix not in (".pyc", ".pyo"))
-    require(set(manifest["inputs"]) == input_paths, "test executable source inventory differs from this build")
-    for path, expected in manifest["inputs"].items():
-        require(digest((source / path).read_bytes()) == expected, f"test executable input changed: {path}")
+    # The executables were compiled in a tree that holds every build input and
+    # nothing else, so what they were compiled from is the sealed manifest,
+    # path for path and byte for byte; build.sh has proved this checkout is it.
+    sealed = {}
+    for line in (source / "config/build-inputs.sha256").read_text(encoding="utf-8").splitlines():
+        sealed[line[66:]] = line[:64]
+    compiled = manifest["inputs"]
+    only_compiled = sorted(set(compiled) - set(sealed))
+    only_sealed = sorted(set(sealed) - set(compiled))
+    differing = sorted(path for path in set(compiled) & set(sealed) if compiled[path] != sealed[path])
+    require(not (only_compiled or only_sealed or differing),
+            "the test executables were not compiled from exactly the sealed build inputs: "
+            f"compiled from but not a build input {only_compiled}, a build input absent from "
+            f"the compilation {only_sealed}, different bytes {differing}")
     for name, expected in manifest["artifacts"].items():
         raw = (artifacts / name).read_bytes()
         require(len(raw) == expected["bytes"] and digest(raw) == expected["sha256"], "test executable identity changed")

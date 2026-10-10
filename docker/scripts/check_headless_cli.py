@@ -39,28 +39,35 @@ SYSTEM_SETTINGS_FILES = (
     Path("/etc/qwen-code/settings.json"),
     Path("/etc/qwen-code/system-defaults.json"),
 )
-# The two-turn cycle's requests, in order: the startup proof's seven counts (the preamble,
+# The two-turn cycle's requests, in order, each with the roles of the messages it carries
+# (None for a text counted alone). First the startup proof's seven counts: the preamble;
 # the preamble with its startup context, the compaction frame -- the snapshot's trailer --
-# and the todo reminder, the framing
-# text alone, the message, turn and tool-result probes, and the preamble in the shape a
-# compaction request carries it), then for each turn the request it is about to issue,
+# and the todo reminder; the framing text alone; the message, turn and tool-result probes;
+# and the preamble in the shape a compaction request carries it. Then each turn's request,
 # counted once -- the client shows a body to the tokenizer once, and compaction leaves the
-# request as it was -- and the generation. A tool result is bounded where it is made, so no
-# turn counts a baseline without it.
-EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] + ["/v1/chat/completions"]
-EXPECTED_ROLES = [
-    ["system"],
-    ["system", "user", "user", "user"],
-    None,
-    ["system", "user"],
-    ["system", "user", "assistant"],
-    ["system", "user", "assistant", "tool"],
-    ["system", "user"],
-    ["system", "user"],
-    ["system", "user"],
-    ["system", "user", "assistant", "tool"],
-    ["system", "user", "assistant", "tool"],
-]
+# request as it was -- and its generation. A tool result is bounded where it is made, so no
+# turn counts a baseline without it: the first turn's call is a read_file, which counts
+# each form of the statement its page carries at its widest, and then the page's text.
+_SYSTEM_USER = ["system", "user"]
+_WITH_RESULT = ["system", "user", "assistant", "tool"]
+EXPECTED_REQUESTS = (
+    [("/tokenize", ["system"]),
+     ("/tokenize", ["system", "user", "user", "user"]),
+     ("/tokenize", None),
+     ("/tokenize", _SYSTEM_USER),
+     ("/tokenize", ["system", "user", "assistant"]),
+     ("/tokenize", _WITH_RESULT),
+     ("/tokenize", _SYSTEM_USER),
+     ("/tokenize", _SYSTEM_USER),
+     ("/v1/chat/completions", _SYSTEM_USER)]
+    + [("/tokenize", None)] * 4
+    + [("/tokenize", None),
+       ("/tokenize", _WITH_RESULT),
+       ("/v1/chat/completions", _WITH_RESULT)]
+)
+EXPECTED_ROUTES = [route for route, _ in EXPECTED_REQUESTS]
+EXPECTED_ROLES = [roles for _, roles in EXPECTED_REQUESTS]
+GENERATIONS = [index for index, route in enumerate(EXPECTED_ROUTES) if route == "/v1/chat/completions"]
 # The proof's count of what a compaction request adds: the turn's tools with the snapshot's
 # declaration after them, and the message that closes the request, stating the widest
 # ceiling a draw can be issued with, the served window.
@@ -235,7 +242,7 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
                     f"request {index} does not state the sealed {turn_budget}-turn budget")
     require(sorted(t["function"]["name"] for t in tools) == sorted(strict_tools),
             "the declared tools are not the launcher's strict tools")
-    for index in (8, 10):
+    for index in GENERATIONS:
         body = requests[index]["body"]
         for key, value in config["samplingParams"].items():
             require(body[key] == value, f"generation {index} sends {key}={body[key]!r}, not {value!r}")
