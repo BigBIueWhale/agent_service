@@ -1232,7 +1232,11 @@ cannot carry back into a prompt, an integer of more digits than it converts or
 a `\u` escape that is half a surrogate pair. Only a schema that leaves a level
 open can be written with a parameter twice: a level declared closed reaches the
 backend closed, and its grammar admits each of its names once, in declared
-order, so the locked run, whose tools are all closed, never meets the first. It
+order (a cost not measured: a parameter the model would write after a
+later-declared one is left out or written under another name; the one local
+recording wrote all 124 of its calls in declared order, which bounds it below
+about 2.4% of calls at 95% confidence), so the locked run, whose tools are all
+closed, never meets the first. It
 can meet the other two: `todo_write` declares a todo's `blockedBy` references
 distinct, which no grammar can hold for ids the model chooses, and any call
 carrying a number or a JSON value can hold a value no prompt can carry. Each
@@ -1577,7 +1581,9 @@ shell for the agent, none plus Docker group membership for the service.
 The Node dependency bytes are cached in the toolchain base, resolved from the
 unmodified upstream lockfile, and our image installs offline against them. Our
 patch does rewrite `package-lock.json`, but only its classification — both
-lockfiles resolve the same 2348 packages at the same versions — so the cache is an
+lockfiles resolve the same 2,303 tarballs at the same versions (the entries that
+are not workspace links and carry `resolved`: what an install fetches; the lock's
+2,348 `packages` entries also count the root and its 22 links) — so the cache is an
 exact match for what an install of the patched tree needs rather than a superset
 hoping to cover it. The installed `node_modules` tree is not cached: our patch and
 `patch-package` both rewrite it, so it is rebuilt every time.

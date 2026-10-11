@@ -255779,7 +255779,7 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/core/generation-refusal.ts
-@@ -0,0 +1,288 @@
+@@ -0,0 +1,289 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -255818,7 +255818,8 @@ new file mode 100644
 + * or a tool here that leaves its own open -- since a declaration reaches the
 + * backend as it is declared, and a level declared closed is generated under
 + * a grammar that admits each of its names once, in the order it declares
-+ * them, so the locked run, which declares only closed tools, never meets
++ * them (an order whose cost the converter states where it sends the
++ * schema), so the locked run, which declares only closed tools, never meets
 + * this one. Or no reading of its arguments satisfies its tool's schema: the
 + * grammar does not hold every constraint a schema can state -- that an
 + * array's items are distinct is one no grammar can hold for strings the
@@ -278794,7 +278795,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  export interface ToolCallAccumulator {
    id?: string;
    name?: string;
-@@ -366,30 +268,37 @@
+@@ -366,30 +268,43 @@
              // Gemini tool format - convert parameters to OpenAI format
              parameters = convertGeminiToolParametersToOpenAI(
                func.parameters as Record<string, unknown>,
@@ -278806,7 +278807,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +          // under, so a level declared closed is generated closed -- each
 +          // declared name at most once, in declared order, and no name the
 +          // level does not declare -- and the declaration the model reads
-+          // is the one its call is held to.
++          // is the one its call is held to. The order has a cost: a call
++          // whose model would write an earlier-declared parameter after a
++          // later one can only go on with the names still to come or close,
++          // so that parameter is left out or its value written under another
++          // name. How often is not measured; the one local recording wrote
++          // all 124 of its calls in declared order, which bounds it below
++          // about 2.4% of calls at 95% confidence (three in 124).
            if (parameters) {
              parameters = convertSchema(parameters, schemaCompliance);
 -            // #7315: gateways enforcing OpenAI's structured-output contract
@@ -278844,7 +278851,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      }
    }
  
-@@ -399,38 +308,38 @@
+@@ -399,38 +314,38 @@
  /**
   * Convert Gemini request to OpenAI message format.
   */
@@ -278892,7 +278899,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    // Parse parts inline
    const thoughtParts: string[] = [];
    const contentParts: string[] = [];
-@@ -474,27 +383,25 @@
+@@ -474,27 +389,25 @@
      message.tool_calls = toolCalls;
    }
  
@@ -278932,7 +278939,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      : Date.now();
    const createdSeconds = Number.isFinite(createdMs)
      ? Math.floor(createdMs / 1000)
-@@ -528,19 +435,87 @@
+@@ -528,19 +441,87 @@
  
    const systemText = extractTextFromContentUnion(
      request.config.systemInstruction,
@@ -279022,7 +279029,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  function processContents(
    contents: ContentListUnion,
    messages: ExtendedChatCompletionMessageParam[],
-@@ -570,43 +545,63 @@
+@@ -570,43 +551,63 @@
  
    if (!isContentObject(content)) return;
    const parts = content.parts || [];
@@ -279088,7 +279095,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      if (mediaPart && role === 'user') {
        contentParts.push(mediaPart);
      }
-@@ -623,16 +618,16 @@
+@@ -623,16 +624,16 @@
          emittedFunctionCallIds.add(callId);
        }
  
@@ -279107,7 +279114,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      if (part.functionResponse && role === 'user') {
        const responseId = part.functionResponse.id;
-@@ -644,12 +639,13 @@
+@@ -644,12 +645,13 @@
        }
  
        // Create tool message for the function response (with embedded media)
@@ -279121,7 +279128,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          // resolved in pipeline.ts). OpenAI spec only permits string / text-part
          // content on `role: "tool"` messages. Strict OpenAI-compatible servers
          // (e.g. doubao / new-api / LM Studio) silently drop or reject tool
-@@ -682,12 +678,17 @@
+@@ -682,12 +684,17 @@
              }
            }
            if (mediaParts.length > 0) {
@@ -279139,7 +279146,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          if (
            requestContext.toolResultContentFormat === 'string' &&
            Array.isArray(toolMessage.content)
-@@ -697,12 +698,13 @@
+@@ -697,12 +704,13 @@
              toolContent.every(
                (cp): cp is OpenAI.Chat.ChatCompletionContentPartText =>
                  cp?.type === 'text',
@@ -279153,7 +279160,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
    }
-@@ -711,53 +713,62 @@
+@@ -711,53 +719,62 @@
    // tool messages in this group. Runs after the parts loop so all tool
    // messages remain contiguous (OpenAI requirement for parallel tool calls).
    if (accumulatedSplitMedia.length > 0) {
@@ -279233,7 +279240,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      return;
    }
  
-@@ -767,74 +778,112 @@
+@@ -767,74 +784,112 @@
        content:
          contentParts as unknown as OpenAI.Chat.ChatCompletionContentPart[],
      });
@@ -279378,7 +279385,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    }
  
    // IMPORTANT: Always return a tool message, even if content is empty
-@@ -856,17 +905,73 @@
+@@ -856,17 +911,73 @@
      content: contentParts as unknown as
        | string
        | OpenAI.Chat.ChatCompletionContentPartText[],
@@ -279453,7 +279460,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    const { modalities } = requestContext;
  
    if (part.inlineData?.mimeType && part.inlineData?.data) {
-@@ -879,12 +984,17 @@
+@@ -879,12 +990,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -279471,7 +279478,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1070,15 @@
+@@ -960,16 +1076,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -279491,7 +279498,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,106 +1217,27 @@
+@@ -1108,106 +1223,27 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -279611,7 +279618,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * Convert OpenAI response to Gemini format.
   */
  export function convertOpenAIResponseToGemini(
-@@ -1233,107 +1263,174 @@
+@@ -1233,107 +1269,174 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -279856,7 +279863,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1364,27 +1461,21 @@
+@@ -1364,27 +1467,21 @@
  
      // Handle reasoning content (thoughts).
      const reasoningText =
@@ -279889,7 +279896,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      } else if (choice.finish_reason) {
        // Flush any buffered tagged-thinking content on stream end
-@@ -1408,41 +1499,17 @@
+@@ -1408,41 +1505,17 @@
  
      if (
        reasoningText &&
@@ -279935,7 +279942,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
  
-@@ -1482,12 +1549,25 @@
+@@ -1482,12 +1555,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -279961,7 +279968,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,241 +1595,118 @@
+@@ -1515,241 +1601,118 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -280272,7 +280279,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          parts,
          role: 'model' as const,
        },
-@@ -1764,70 +1721,26 @@
+@@ -1764,70 +1727,26 @@
      response.candidates = [candidate];
    } else {
      response.candidates = [];
@@ -280351,7 +280358,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1760,19 @@
+@@ -1847,17 +1766,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -280376,7 +280383,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,323 +1782,17 @@
+@@ -1867,323 +1788,17 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:

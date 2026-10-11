@@ -116,7 +116,9 @@ RUN test "$(node --version)" = 'v22.23.2' \
 # so `node_modules` is built in our image every time and never cached.
 #
 # Our patch does change `package-lock.json`, but only its classification: both
-# locks resolve the same 2348 packages at the same versions, so the tarballs
+# locks resolve the same 2,303 tarballs at the same versions (the entries that
+# are not workspace links and carry `resolved`; 2,348 counts the root and its 22
+# links too), so the tarballs
 # this cache holds are exactly the ones an install of the patched tree needs --
 # an exact match on package identity, not a cache hoping to be a superset. The
 # recorded digest below is what lets our image prove that rather than assume it.
