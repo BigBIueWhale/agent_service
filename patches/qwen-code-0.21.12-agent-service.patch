@@ -11962,7 +11962,77 @@ diff --git a/packages/acp-bridge/src/bridge.test.ts b/packages/acp-bridge/src/br
          promptImpl: async () => {
            await promptGate.promise;
            return { stopReason: 'end_turn' };
-@@ -22231,13 +22353,17 @@
+@@ -18569,24 +18691,68 @@
+         'echo hello',
+         WS_A,
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         { terminalWidth: 120, terminalHeight: 40 },
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+       const it = events[Symbol.asyncIterator]();
+       const first = await it.next();
+       expect(first.value?.type).toBe('user_shell_command');
+       expect(first.value?.originatorClientId).toBe(session.clientId);
+ 
+       abort.abort();
+       await bridge.shutdown();
+       shellSpy.mockRestore();
+     });
+ 
++    it("streams a user command's output decoded per stream, a character split across chunks whole", async () => {
++      // '€' is 0xE2 0x82 0xAC; stdout splits it, and stderr's chunk between
++      // the halves is decoded on its own.
++      const shellSpy = vi
++        .spyOn(ShellExecutionService, 'execute')
++        .mockImplementation(async (...args) => {
++          const options = args[6] as {
++            streamBytes: (chunk: Buffer, stream: 'stdout' | 'stderr') => void;
++          };
++          options.streamBytes(Buffer.from([0x61, 0xe2, 0x82]), 'stdout');
++          options.streamBytes(Buffer.from('e\n'), 'stderr');
++          options.streamBytes(Buffer.from([0xac, 0x0a]), 'stdout');
++          return {
++            pid: 123,
++            result: Promise.resolve({
++              rawOutput: Buffer.alloc(0),
++              output: '',
++              exitCode: 0,
++              signal: null,
++              error: null,
++              aborted: false,
++              pid: 123,
++              executionMethod: 'child_process' as const,
++            }),
++          };
++        });
++      const { bridge, session } = await setupShellSession();
++
++      const result = await bridge.executeShellCommand(
++        session.sessionId,
++        'printf',
++        undefined,
++        { clientId: session.clientId },
++      );
++
++      expect(result).toEqual({
++        exitCode: 0,
++        output: 'ae\n\u20ac\n',
++        aborted: false,
++      });
++      await bridge.shutdown();
++      shellSpy.mockRestore();
++    });
++
+     it('does not hang a completed shell on transport-failed history injection', async () => {
+       const failure = deferred<unknown>();
+       const shellSpy = mockShellExecute('done\n');
+       const handle = makeChannel({
+         extMethodImpl: (method) =>
+           method === SERVE_CONTROL_EXT_METHODS.sessionShellHistory
+@@ -22231,13 +22397,17 @@
          channelFactory: async () =>
            makeChannel({
              extMethodImpl: (method) => {
@@ -11981,7 +12051,7 @@ diff --git a/packages/acp-bridge/src/bridge.test.ts b/packages/acp-bridge/src/br
          freshSessionAdmission: (context) => {
            contexts.push(context);
            return {
-@@ -22306,13 +22432,16 @@
+@@ -22306,13 +22476,16 @@
      it('releases branch admission when transport fails during restore cleanup', async () => {
        const failure = deferred<unknown>();
        const releases: string[] = [];
@@ -12002,6 +12072,22 @@ diff --git a/packages/acp-bridge/src/bridge.test.ts b/packages/acp-bridge/src/br
 diff --git a/packages/acp-bridge/src/bridge.ts b/packages/acp-bridge/src/bridge.ts
 --- a/packages/acp-bridge/src/bridge.ts
 +++ b/packages/acp-bridge/src/bridge.ts
+@@ -34,14 +34,14 @@
+   PRIVATE_PARENT_CAPABILITY_META_KEY,
+   SESSION_ARTIFACT_PERSISTENCE_VERSION,
+   SESSION_TRANSCRIPT_MAX_LIMIT,
+   TrustGateError,
+   normalizeSnapshotPayload,
+   ShellExecutionService,
++  utf8OutputDecoder,
+   type InvocationContextV1,
+-  type ShellOutputEvent,
+ } from '@qwen-code/qwen-code-core';
+ import type { ShellCommandResult } from './bridgeTypes.js';
+ import type { AcpChannel, AcpChannelTransportGuard } from './channel.js';
+ import {
+   EventBus,
+   DEFAULT_RING_SIZE,
 @@ -149,12 +149,15 @@
    TODO_STOP_GUARD_QUEUE_RELEASE_METHOD,
    WORKTREE_MCP_DEFER_META_KEY,
@@ -12550,6 +12636,101 @@ diff --git a/packages/acp-bridge/src/bridge.ts b/packages/acp-bridge/src/bridge.
        };
      },
  
+@@ -10404,58 +10496,65 @@
+ 
+       const outputChunks: string[] = [];
+       const abort = new AbortController();
+       const onSignalAbort = () => abort.abort();
+       signal?.addEventListener('abort', onSignalAbort, { once: true });
+ 
++      // The command's output, streamed to the client as text: each stream
++      // decoded as every command's output is (`utf8OutputDecoder`), a
++      // sequence a chunk ends inside held until the next completes it.
++      const decoders = {
++        stdout: utf8OutputDecoder(),
++        stderr: utf8OutputDecoder(),
++      };
++      const publishOutput = (chunk: string) => {
++        if (!chunk) return;
++        outputChunks.push(chunk);
++        entry.events.publish({
++          type: 'session_update',
++          data: {
++            sessionId,
++            update: {
++              sessionUpdate: 'shell_output',
++              output: chunk,
++              _meta: {
++                serverTimestamp: Date.now(),
++                source: 'user-shell',
++              },
++            },
++          },
++          ...(originatorClientId ? { originatorClientId } : {}),
++        });
++      };
++
+       try {
+         const handle = await ShellExecutionService.execute(
+           command,
+           cwd,
+-          (event: ShellOutputEvent) => {
+-            if (event.type === 'data') {
+-              const chunk =
+-                typeof event.chunk === 'string'
+-                  ? event.chunk
+-                  : event.chunk
+-                      .map((line: Array<{ text: string }>) =>
+-                        line.map((t) => t.text).join(''),
+-                      )
+-                      .join('\n');
+-              outputChunks.push(chunk);
+-              entry.events.publish({
+-                type: 'session_update',
+-                data: {
+-                  sessionId,
+-                  update: {
+-                    sessionUpdate: 'shell_output',
+-                    output: chunk,
+-                    _meta: {
+-                      serverTimestamp: Date.now(),
+-                      source: 'user-shell',
+-                    },
+-                  },
+-                },
+-                ...(originatorClientId ? { originatorClientId } : {}),
+-              });
+-            }
+-          },
++          // A streaming execution emits no output events.
++          () => {},
+           abort.signal,
+           false,
+           { terminalWidth: 120, terminalHeight: 40 },
+-          { streamStdout: true },
++          {
++            streamBytes: (bytes, stream) =>
++              publishOutput(decoders[stream].decode(bytes, { stream: true })),
++          },
+         );
+ 
+         const timeoutId = setTimeout(
+           () => abort.abort(),
+           SHELL_COMMAND_TIMEOUT_MS,
+         );
+         timeoutId.unref();
+ 
+         const result = await handle.result;
+         clearTimeout(timeoutId);
++        // A sequence a stream ended inside is not UTF-8.
++        publishOutput(decoders.stdout.decode());
++        publishOutput(decoders.stderr.decode());
+ 
+         const exitCode = result.exitCode;
+         const aborted = result.aborted;
+         const output = outputChunks.join('') || result.output;
+ 
+         entry.events.publish({
 diff --git a/packages/acp-bridge/src/bridgeTypes.ts b/packages/acp-bridge/src/bridgeTypes.ts
 --- a/packages/acp-bridge/src/bridgeTypes.ts
 +++ b/packages/acp-bridge/src/bridgeTypes.ts
@@ -315067,7 +315248,21 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +629,26 @@
+@@ -364,12 +393,13 @@
+   TERMINAL_CSI_REGEX,
+   TERMINAL_SHIFT_DCS_REGEX,
+   NOTIFICATION_LABEL_MAX_LENGTH,
+ } from './utils/terminalSafe.js';
+ export { escapeXml } from './utils/xml.js';
+ export * from './services/shellExecutionService.js';
++export { utf8OutputDecoder } from './utils/utf8-output.js';
+ export * from './services/monitorRegistry.js';
+ export * from './services/backgroundShellRegistry.js';
+ export * from './agents/workflow-run-registry.js';
+ export * from './agents/workflow-snapshot.js';
+ export {
+   listSavedWorkflows,
+@@ -600,24 +630,26 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -315095,7 +315290,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +735,97 @@
+@@ -704,6 +736,97 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -322008,6 +322203,197 @@ new file mode 100644
 +  }
 +  return value as AttributionSnapshot;
 +}
+diff --git a/packages/core/src/services/backgroundShellRegistry.test.ts b/packages/core/src/services/backgroundShellRegistry.test.ts
+--- a/packages/core/src/services/backgroundShellRegistry.test.ts
++++ b/packages/core/src/services/backgroundShellRegistry.test.ts
+@@ -482,12 +482,56 @@
+       const [, modelText] = callback.mock.calls[0];
+       expect(modelText).toContain('<output-tail truncated="true">');
+       expect(modelText).toContain('last line</output-tail>');
+       expect(modelText).not.toContain('prefix-');
+     });
+ 
++    it('counts on the output-tail what its text does not show of the bytes', () => {
++      // The output file holds the command's bytes as written, so the tail is
++      // where they become text: a byte that is not UTF-8 is shown as U+FFFD
++      // and an escape character removed, and each is counted.
++      const reg = new BackgroundShellRegistry();
++      const callback = vi.fn();
++      const dir = mkdtempSync(join(tmpdir(), 'qwen-shell-bytes-'));
++      tmpDirs.push(dir);
++      const file = join(dir, 'shell.output');
++      writeFileSync(
++        file,
++        Buffer.concat([
++          Buffer.from('\x1b[31mred\x1b[0m a'),
++          Buffer.from([0xff, 0xfe]),
++          Buffer.from('b\n'),
++        ]),
++      );
++      reg.setNotificationCallback(callback);
++      reg.register(makeEntry({ shellId: 'bytes', outputPath: file }));
++
++      reg.complete('bytes', 0, 2000);
++
++      const [, modelText] = callback.mock.calls[0];
++      expect(modelText).toContain(
++        '<output-tail truncated="false" not-utf8-bytes="2" removed-characters="2">[31mred[0m a\uFFFD\uFFFDb</output-tail>',
++      );
++    });
++
++    it('states nothing unshown for a tail that is text', () => {
++      const reg = new BackgroundShellRegistry();
++      const callback = vi.fn();
++      reg.setNotificationCallback(callback);
++      reg.register(
++        makeEntry({ shellId: 'text', outputPath: makeOutputFile('done\n') }),
++      );
++
++      reg.complete('text', 0, 2000);
++
++      const [, modelText] = callback.mock.calls[0];
++      expect(modelText).toContain(
++        '<output-tail truncated="false">done</output-tail>',
++      );
++    });
++
+     it('skips leading UTF-8 continuation bytes at the truncation boundary', () => {
+       // When the byte budget cuts a multi-byte UTF-8 codepoint in half,
+       // the raw read would produce a U+FFFD replacement character.
+       // Place a 3-byte '€' (U+20AC → 0xE2 0x82 0xAC) so that the
+       // truncation offset lands on its second byte.
+       const reg = new BackgroundShellRegistry();
+diff --git a/packages/core/src/services/backgroundShellRegistry.ts b/packages/core/src/services/backgroundShellRegistry.ts
+--- a/packages/core/src/services/backgroundShellRegistry.ts
++++ b/packages/core/src/services/backgroundShellRegistry.ts
+@@ -26,38 +26,64 @@
+ import { todoWorkChainContext } from '../utils/promptIdContext.js';
+ import {
+   isBidiControlChar,
+   stripDisplayControlChars,
+   truncateNotificationLabel,
+ } from '../utils/terminalSafe.js';
++import { countNonUtf8Bytes, utf8OutputDecoder } from '../utils/utf8-output.js';
+ import { escapeXml } from '../utils/xml.js';
+ 
+ const debugLogger = createDebugLogger('BACKGROUND_SHELLS');
+ const MAX_NOTIFICATION_MODEL_COMMAND_LENGTH = 500;
+ export const MAX_NOTIFICATION_OUTPUT_TAIL_BYTES = 8192;
+ 
+-function stripOutputControlChars(text: string): string {
++/**
++ * `text` without the characters a notification never carries -- C0
++ * controls but tab, line feed and carriage return, C1 controls, and
++ * bidirectional formatting -- and how many of them it removed, which the
++ * notification states.
++ */
++function stripOutputControlChars(text: string): {
++  text: string;
++  removed: number;
++} {
+   let out = '';
++  let removed = 0;
+   for (let i = 0; i < text.length; i++) {
+     const code = text.charCodeAt(i);
+     if (code === 0x09 || code === 0x0a || code === 0x0d) {
+       out += text[i];
+       continue;
+     }
+-    if (code < 0x20) continue;
+-    if (code >= 0x80 && code <= 0x9f) continue;
+     // Same bidi set as the shared display helper, in its own loop only
+     // because the tail must keep \n and \r, which that helper strips.
+-    if (isBidiControlChar(code)) continue;
++    if (
++      code < 0x20 ||
++      (code >= 0x80 && code <= 0x9f) ||
++      isBidiControlChar(code)
++    ) {
++      removed++;
++      continue;
++    }
+     out += text[i];
+   }
+-  return out;
++  return { text: out, removed };
+ }
+ 
++/**
++ * The end of an output file as a notification shows it: its text, and what
++ * the text does not show of the bytes -- those that are not UTF-8, shown
++ * as U+FFFD, and the characters removed.
++ */
+ type OutputTailResult =
+-  | { text: string; truncated: boolean }
++  | {
++      text: string;
++      truncated: boolean;
++      notUtf8Bytes: number;
++      removedCharacters: number;
++    }
+   | { error: string }
+   | undefined;
+ 
+ function readOutputTail(outputFile: string): OutputTailResult {
+   let fd: number | undefined;
+   try {
+@@ -79,20 +105,28 @@
+         (buffer[sliceOffset]! & 0xc0) === 0x80
+       ) {
+         sliceOffset++;
+       }
+     }
+ 
+-    const text = stripOutputControlChars(
+-      buffer.subarray(sliceOffset, bytesRead).toString('utf8'),
+-    ).trimEnd();
++    // The file holds the command's bytes as it wrote them, so the tail is
++    // the one place they become text: decoded as every command's output
++    // is, each sequence that is not UTF-8 shown as U+FFFD and counted.
++    const bytes = buffer.subarray(sliceOffset, bytesRead);
++    const stripped = stripOutputControlChars(utf8OutputDecoder().decode(bytes));
++    const text = stripped.text.trimEnd();
++    const notUtf8Bytes = countNonUtf8Bytes(bytes);
+ 
+-    if (!text) return undefined;
++    if (!text && notUtf8Bytes === 0 && stripped.removed === 0) {
++      return undefined;
++    }
+     return {
+       text,
+       truncated: start > 0,
++      notUtf8Bytes,
++      removedCharacters: stripped.removed,
+     };
+   } catch (error) {
+     debugLogger.warn(`Failed to read shell output tail:`, error);
+     return {
+       error: error instanceof Error ? error.message : String(error),
+     };
+@@ -520,14 +554,22 @@
+     }
+     const outputTail = readOutputTail(entry.outputFile);
+     if (outputTail) {
+       if ('error' in outputTail) {
+         xmlParts.push(`<output-tail error="unreadable" />`);
+       } else {
++        // What the text does not show is counted where there is any.
++        const unshown =
++          (outputTail.notUtf8Bytes > 0
++            ? ` not-utf8-bytes="${outputTail.notUtf8Bytes}"`
++            : '') +
++          (outputTail.removedCharacters > 0
++            ? ` removed-characters="${outputTail.removedCharacters}"`
++            : '');
+         xmlParts.push(
+-          `<output-tail truncated="${outputTail.truncated ? 'true' : 'false'}">${escapeXml(outputTail.text)}</output-tail>`,
++          `<output-tail truncated="${outputTail.truncated ? 'true' : 'false'}"${unshown}>${escapeXml(outputTail.text)}</output-tail>`,
+         );
+       }
+     }
+     xmlParts.push(
+       `<output-file>${escapeXml(stripDisplayControlChars(entry.outputFile))}</output-file>`,
+       '</task-notification>',
 diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/core/src/services/chat-recording-io.test.ts
 new file mode 100644
 --- /dev/null
@@ -366933,7 +367319,7 @@ new file mode 100644
 +  } as never).description;
 +  const lead = pty
 +    ? 'its output is shown as that terminal displays it: '
-+    : "A command's output is shown with ";
++    : "A foreground command's output is shown with ";
 +  const start = description.indexOf(lead);
 +  expect(start).toBeGreaterThanOrEqual(0);
 +  const end = description.indexOf('. To see ', start);
@@ -367828,7 +368214,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        0,
        0.5,
        -1,
-@@ -2485,15 +2588,14 @@
+@@ -2485,38 +2588,49 @@
              maxBufferedOutputBytes: configuredValue as unknown as number,
            },
          );
@@ -367843,28 +368229,57 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        },
      );
  
-     it('reports capture-limit notice for streaming child_process output', async () => {
+-    it('reports capture-limit notice for streaming child_process output', async () => {
++    it('streams every byte the command writes, as written, and captures none of it', async () => {
++      // An escape sequence, a byte that is not UTF-8, a sequence a chunk
++      // ends inside, and output that sniffs as binary: a streaming caller
++      // holds the output, so each reaches it as the command wrote it, past
++      // any capture limit.
++      const chunks = [
++        Buffer.from('\x1b[31mred\x1b[0m '),
++        Buffer.from([0x61, 0xff, 0x62, 0xe2, 0x82]),
++        Buffer.from([0xac, 0x0a]),
++        Buffer.from([0x00, 0x01, 0x02, 0x00, 0x00, 0x00]),
++      ];
++      const streamed: Buffer[] = [];
        const { result } = await simulateExecutionWithConfig(
-         'streaming-large-output',
-@@ -2508,15 +2610,14 @@
+-        'streaming-large-output',
++        'streaming-bytes',
+         (cp) => {
+-          cp.stdout?.emit('data', Buffer.from('abcdef'));
++          cp.stdout?.emit('data', chunks[0]);
++          cp.stderr?.emit('data', chunks[1]);
++          cp.stdout?.emit('data', chunks[2]);
++          cp.stdout?.emit('data', chunks[3]);
+           cp.emit('exit', 0, null);
+           cp.emit('close', 0, null);
+         },
+         { ...shellExecutionConfig, maxBufferedOutputBytes: 1 },
+-        { streamStdout: true },
++        { streamBytes: (chunk) => streamed.push(chunk) },
+       );
  
-       expect(onOutputEventMock).toHaveBeenCalledWith({
-         type: 'data',
-         chunk: 'abcdef',
-       });
-       expect(result.rawOutput.length).toBe(1);
+-      expect(onOutputEventMock).toHaveBeenCalledWith({
+-        type: 'data',
+-        chunk: 'abcdef',
+-      });
+-      expect(result.rawOutput.length).toBe(1);
 -      expect(result.output).toContain(
 -        'Output exceeded the maximum captured size',
 -      );
-+      expect(result.output).toContain('cut at a limit of 1 bytes of output');
-+      expect(result.outputCaptureLimitExceeded).toBe(true);
++      expect(Buffer.concat(streamed)).toEqual(Buffer.concat(chunks));
++      expect(onOutputEventMock).not.toHaveBeenCalled();
++      expect(result.rawOutput.length).toBe(0);
++      expect(result.output).toBe('');
++      expect(result.outputCaptureLimitExceeded).toBeFalsy();
++      expect(result.exitCode).toBe(0);
      });
  
      it('emits only the capture-limit notice when stripped captured output is empty', async () => {
        const { result } = await simulateExecutionWithConfig(
          'empty-captured-output',
          (cp) => {
-@@ -2525,15 +2626,14 @@
+@@ -2525,15 +2639,14 @@
            cp.emit('close', 0, null);
          },
          { ...shellExecutionConfig, maxBufferedOutputBytes: 1 },
@@ -367882,7 +368297,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        const { result } = await simulateExecution('touch file', (cp) => {
          cp.emit('exit', 0, null);
          cp.emit('close', 0, null);
-@@ -3164,13 +3264,13 @@
+@@ -3164,13 +3277,13 @@
        const abortController = new AbortController();
        const handle = await ShellExecutionService.execute(
          'unresponsive_process',
@@ -367897,7 +368312,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        abortController.abort();
  
        // Check the first kill signal
-@@ -3212,12 +3312,19 @@
+@@ -3212,12 +3325,19 @@
          cp.emit('exit', 0, null);
        });
  
@@ -367917,7 +368332,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        });
      });
  
-@@ -3430,13 +3537,13 @@
+@@ -3430,13 +3550,13 @@
      mockPtyProcess.write = vi.fn();
      mockPtyProcess.resize = vi.fn();
  
@@ -367932,7 +368347,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
      mockChildProcess = new EventEmitter() as EventEmitter &
        Partial<ChildProcess>;
      mockChildProcess.stdout = new EventEmitter() as Readable;
-@@ -3595,13 +3702,13 @@
+@@ -3595,13 +3715,13 @@
      mockPtyProcess.onExit.mock.calls[0][0]({ exitCode: 0, signal: null });
      const result = await handle.result;
  
@@ -367947,7 +368362,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
      const abortController = new AbortController();
      const handle = await ShellExecutionService.execute(
        'test command',
-@@ -3619,33 +3726,85 @@
+@@ -3619,33 +3739,85 @@
      expect(mockGetPty).not.toHaveBeenCalled();
      expect(mockPtySpawn).not.toHaveBeenCalled();
      expect(mockCpSpawn).toHaveBeenCalled();
@@ -368209,7 +368624,13 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 +  'the output is binary, and binary output is not shown. To inspect it, ' +
 +  'run the command again with its output redirected to a file, then examine ' +
 +  'that file with a command that prints bytes as text, such as `od -c`.';
-+
+ 
+-  const notice =
+-    `[Output exceeded the maximum captured size of ` +
+-    `${formatMemoryUsage(maxBufferedOutputBytes)}; captured the first ` +
+-    `${formatMemoryUsage(maxBufferedOutputBytes)} of ` +
+-    `${formatMemoryUsage(totalBytesReceived)} and discarded the rest to ` +
+-    `avoid constructing an oversized JavaScript string.]`;
 +/**
 + * What the terminal replay made of a command's output: the text it rendered,
 + * or why it would not render it. A refused rendering is stated in place of
@@ -368222,7 +368643,8 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 +      readonly notUtf8Bytes: number;
 +    }
 +  | { readonly refused: AuthoredText };
-+
+ 
+-  return output ? `${output}\n\n${notice}` : notice;
 +/**
 + * What the result says of output bytes that are not UTF-8: how many there
 + * were, that each sequence of them is shown as U+FFFD, and how to see them.
@@ -368240,18 +368662,11 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 +    'a command that prints bytes as text, such as `od -c`.'
 +  );
 +}
- 
--  const notice =
--    `[Output exceeded the maximum captured size of ` +
--    `${formatMemoryUsage(maxBufferedOutputBytes)}; captured the first ` +
--    `${formatMemoryUsage(maxBufferedOutputBytes)} of ` +
--    `${formatMemoryUsage(totalBytesReceived)} and discarded the rest to ` +
--    `avoid constructing an oversized JavaScript string.]`;
++
 +const CAPTURE_LIMIT_DISCARDED =
 +  'it was discarded as it arrived. To read all of it, run the command again ' +
 +  `with its output redirected to a file, then read that file with ${ToolNames.READ_FILE}.`;
- 
--  return output ? `${output}\n\n${notice}` : notice;
++
 +/**
 + * A command's output as its result carries it: the text, or with the one
 + * notice every tool phrases a bound in, saying what the result does not carry,
@@ -368329,7 +368744,30 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
   * Optional caller-side handlers for the *post-promote* lifetime of a
   * background-promoted child process. PR-2 (#3894) detached every
   * service-side listener at promote time and froze `result.output` at
-@@ -405,38 +544,160 @@
+@@ -337,13 +476,21 @@
+ /**
+  * Options bag for `ShellExecutionService.execute()`. Kept as an
+  * interface (rather than the prior inline shape) so future additions
+  * land without breaking signatures.
+  */
+ export interface ShellExecuteOptions {
+-  streamStdout?: boolean;
++  /**
++   * Streams the output instead of capturing it: every chunk of the child
++   * process's stdout and stderr, with the stream it came from, in the order
++   * the chunks arrive, exactly as the command wrote it -- nothing decoded,
++   * stripped, cut at a capture limit or withheld as binary. Its caller holds
++   * the output, so no `data` or binary event is emitted and the result's
++   * output is empty. Only the child-process path streams.
++   */
++  streamBytes?: (chunk: Buffer, stream: 'stdout' | 'stderr') => void;
+   /**
+    * Post-promote callback hooks. See {@link ShellPostPromoteHandlers}.
+    * Optional; omit to preserve the PR-2 detach-everything contract.
+    */
+   postPromote?: ShellPostPromoteHandlers;
+ }
+@@ -405,38 +552,160 @@
    return (
      message.includes('ioctl(2) failed, EBADF') ||
      message.includes('Cannot resize a pty that has already exited')
@@ -368496,7 +368934,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
      if (
        line
          .map((segment) => segment.text)
-@@ -734,48 +995,46 @@
+@@ -734,53 +1003,53 @@
          throw ptyOutcome.error;
        }
        if (abortSignal.aborted) {
@@ -368550,7 +368988,8 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
        cwd,
        onOutputEvent,
        abortSignal,
-       options.streamStdout ?? false,
+-      options.streamStdout ?? false,
++      options.streamBytes,
        getMaxBufferedOutputBytes(shellExecutionConfig),
        shellExecutionConfig.pager,
        options.postPromote,
@@ -368563,9 +369002,17 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
      cwd: string,
      onOutputEvent: (event: ShellOutputEvent) => void,
      abortSignal: AbortSignal,
-     streamStdout: boolean,
+-    streamStdout: boolean,
++    streamBytes:
++      | ((chunk: Buffer, stream: 'stdout' | 'stderr') => void)
++      | undefined,
      maxBufferedOutputBytes: number,
-@@ -811,14 +1070,19 @@
+     pager: string | undefined,
+     postPromote?: ShellPostPromoteHandlers,
+   ): ShellExecutionHandle {
+     try {
+       const isWindows = os.platform() === 'win32';
+@@ -811,14 +1080,19 @@
            }),
            ...getShellContextEnvVars(),
          },
@@ -368587,7 +369034,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          const outputChunks: Buffer[] = [];
          const sniffChunks: Buffer[] = [];
          let error: Error | null = null;
-@@ -867,23 +1131,12 @@
+@@ -867,23 +1141,19 @@
            }
  
            return captured.length > 0 ? captured : null;
@@ -368603,7 +369050,13 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 -              stdoutDecoder = new TextDecoder('utf-8');
 -              stderrDecoder = new TextDecoder('utf-8');
 -            }
--          }
++          if (streamBytes) {
++            // Streaming: the caller holds the output, byte for byte as the
++            // command wrote it, so nothing here decodes, captures or sniffs.
++            totalOutputBytes += data.length;
++            streamBytes(data, stream);
++            return;
+           }
 -
            // Binary sniff applies in both modes — even streaming consumers
            // (e.g. background shell output file) shouldn't pile up text-decoded
@@ -368611,8 +369064,49 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            // image dumps, etc.). Track sniffed bytes by running sum so the
            // accumulator is truly byte-bounded — the previous version recomputed
            // sniffedBytes from `slice(0, 20)` on every call, which never grew
-@@ -937,12 +1190,15 @@
+@@ -898,51 +1168,33 @@
+               sniffChunks.push(sniffSlice);
+               sniffedBytes += sniffSlice.length;
+             }
+             const sniffBuffer = Buffer.concat(sniffChunks);
+             if (isBinary(sniffBuffer)) {
+               isStreamingRawContent = false;
+-              if (streamStdout) {
+-                // Tell the streaming consumer to stop writing text chunks;
+-                // drop the sniff accumulator now so it can be GC'd.
+-                onOutputEvent({ type: 'binary_detected' });
+-                sniffChunks.length = 0;
+-              }
+-            } else if (streamStdout && sniffedBytes >= MAX_SNIFF_SIZE) {
+-              // Sniff passed in streaming mode — text confirmed, drop the
+-              // accumulator. Subsequent chunks fall through to the streaming
+-              // emit path below without ever touching outputChunks.
+-              sniffChunks.length = 0;
+             }
+           }
  
+           totalOutputBytes += data.length;
+           const capturedData = captureOutputData(data);
+ 
+           if (!isStreamingRawContent) {
+-            // Binary mode: drop further data. Foreground emits the
+-            // binary_detected event from handleExit (existing behavior);
+-            // background already emitted it above.
++            // Binary mode: drop further data; handleExit emits the
++            // binary_detected event.
+             return;
+           }
+ 
+           const decoder = stream === 'stdout' ? stdoutDecoder : stderrDecoder;
+-          if (streamStdout) {
+-            // Streaming text mode: push through immediately, no string
+-            // accumulation. (Up to ~4KB may already have been emitted
+-            // before binary detection trips — bounded, acceptable.)
+-            const decodedChunk = decoder.decode(data, { stream: true });
+-            onOutputEvent({ type: 'data', chunk: decodedChunk });
+-            return;
+-          }
+-
            if (!capturedData) {
              return;
            }
@@ -368627,7 +369121,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
              stdout += decodedChunk;
            } else {
              stderr += decodedChunk;
-@@ -957,18 +1213,22 @@
+@@ -957,38 +1209,44 @@
            // Ensure we don't add an extra newline if stdout already ends with one.
            const separator = stdout.endsWith('\n') ? '' : '\n';
            const combinedOutput =
@@ -368653,9 +369147,11 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            if (isStreamingRawContent) {
              // In streaming mode chunks were already emitted as they arrived;
              // re-emitting the final blob would duplicate everything.
-             if (!streamStdout && boundedOutput) {
+-            if (!streamStdout && boundedOutput) {
++            if (!streamBytes && boundedOutput) {
                onOutputEvent({ type: 'data', chunk: boundedOutput });
-@@ -977,18 +1237,20 @@
+             }
+           } else {
              onOutputEvent({ type: 'binary_detected' });
            }
  
@@ -368676,7 +369172,46 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          // Named handler refs so the background-promote branch below can
          // detach them all and hand ownership of the child cleanly to the
          // caller. Anonymous arrows here would leak: the still-running child
-@@ -1077,18 +1339,22 @@
+@@ -1049,27 +1307,24 @@
+           // and resolve immediately with `promoted: true` so the awaiting
+           // caller unblocks. The caller has attached its own listeners
+           // by this point and now owns the child.
+           //
+           // INVARIANT: this snapshot path reads from `stdout` / `stderr`
+           // string accumulators (populated by handleOutput's buffered-text
+-          // branch). Under `streamStdout: true`, output is forwarded
+-          // through `onOutputEvent` and NOT accumulated into stdout/stderr,
+-          // so the promoted snapshot would be silently empty. PR-1's only
+-          // caller (foreground shell.ts) uses streamStdout: false, so
+-          // there's no live combination today; if a future caller pairs
+-          // `streamStdout: true` with `{ kind: 'background' }`, log so the
+-          // empty-snapshot is observable rather than mysterious. The
+-          // caller still has rawOutput as a fallback.
+-          if (streamStdout) {
++          // branch). A streaming caller (`streamBytes`) holds its output
++          // itself and nothing is accumulated, so the promoted snapshot
++          // would be empty. The only promoting caller (foreground shell.ts)
++          // does not stream, so there's no live combination today; if a
++          // future caller pairs `streamBytes` with `{ kind: 'background' }`,
++          // log so the empty snapshot is observable rather than mysterious.
++          if (streamBytes) {
+             debugLogger.warn(
+-              'Background-promote on a streamStdout=true child_process: ' +
+-                'snapshot accumulators were never populated (output went ' +
+-                'through onOutputEvent), so result.output will be empty. ' +
+-                'Caller should fall back to rawOutput, or assemble its ' +
+-                'own snapshot from the data events it received.',
++              'Background-promote on a streaming child_process: snapshot ' +
++                'accumulators were never populated (the output went to ' +
++                'streamBytes), so result.output will be empty. The caller ' +
++                'holds the output it streamed.',
+             );
+           }
+           this.activeChildProcesses.delete(child.pid);
+           detachServiceListeners();
+           const {
+             stdout: snapStdout,
+@@ -1077,18 +1332,22 @@
              finalBuffer,
            } = cleanup();
            const separator = snapStdout.endsWith('\n') ? '' : '\n';
@@ -368704,7 +369239,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            // the foreground listeners that just got removed; attach
            // BEFORE `resolve()` so a sub-millisecond data burst right
            // after promote still lands on the caller. The new listeners
-@@ -1096,57 +1362,28 @@
+@@ -1096,57 +1355,28 @@
            // ownership is the caller's from this point. We also attach
            // a fresh exit listener (the foreground exitHandler is also
            // detached by detachServiceListeners) so the caller can
@@ -368775,7 +369310,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            if (postPromote?.onData) {
              const onPostData = postPromote.onData;
              const safeData = (decoder: TextDecoder) => (chunk: Buffer) => {
-@@ -1309,12 +1546,13 @@
+@@ -1309,12 +1539,13 @@
                );
              }
            }
@@ -368789,7 +369324,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
              // `aborted: false` (despite the abort signal having fired) is
              // intentional — this is the result-shape decision settled in
              // #3831 design question 7 (raised by @tanzhenxin in the PR-1
-@@ -1328,12 +1566,13 @@
+@@ -1328,12 +1559,13 @@
              // before `aborted` to avoid emitting "cancelled" copy for a
              // process that's still running.
              aborted: false,
@@ -368803,7 +369338,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          const performCancelKill = async (): Promise<void> => {
            if (!child.pid || exited) return;
            if (isWindows) {
-@@ -1423,24 +1662,15 @@
+@@ -1423,24 +1655,15 @@
  
          child.on('exit', exitHandler);
  
@@ -368831,7 +369366,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            return { stdout, stderr, finalBuffer };
          }
        });
-@@ -1451,12 +1681,13 @@
+@@ -1451,12 +1674,13 @@
        return {
          pid: undefined,
          result: Promise.resolve({
@@ -368845,7 +369380,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            pid: undefined,
            executionMethod: 'none',
          }),
-@@ -1471,16 +1702,12 @@
+@@ -1471,16 +1695,12 @@
      abortSignal: AbortSignal,
      shellExecutionConfig: ShellExecutionConfig,
      ptyInfo: PtyImplementation,
@@ -368862,7 +369397,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
        const { executable, argsPrefix, shell } = getShellConfiguration();
        commandToExecute = applyUtf8Prefix(commandToExecute, shell);
  
-@@ -1512,12 +1739,16 @@
+@@ -1512,12 +1732,16 @@
              includeGitPager: true,
              platform: os.platform(),
            }),
@@ -368879,7 +369414,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          const headlessTerminal = new Terminal({
            allowProposedApi: true,
            cols,
-@@ -1528,13 +1759,15 @@
+@@ -1528,13 +1752,15 @@
          });
          headlessTerminal.scrollToTop();
  
@@ -368896,7 +369431,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          const error: Error | null = null;
          let exited = false;
          // Set the moment performCancelKill actually proceeds (a cancel reached
-@@ -1666,25 +1899,12 @@
+@@ -1666,25 +1892,12 @@
          headlessTerminal.onScroll(() => {
            if (!isWriting) {
              render();
@@ -368922,7 +369457,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
              return;
            }
  
-@@ -1705,13 +1925,12 @@
+@@ -1705,13 +1918,12 @@
          };
  
          const handleOutput = (data: Buffer) => {
@@ -368936,7 +369471,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
  
            processingChain = processingChain.then(
              () =>
-@@ -1733,13 +1952,13 @@
+@@ -1733,13 +1945,13 @@
                        onOutputEvent({ type: 'binary_detected' });
                      }
                    }
@@ -368951,7 +369486,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                    // serialize next reads from this buffer. The render()
                    // callback (and renderFn) is already guarded by
                    // listenersDetached, so no onOutputEvent fires.
-@@ -1765,15 +1984,16 @@
+@@ -1765,15 +1977,16 @@
          // background-promote branch below can hand the live PTY to the
          // caller cleanly. Without dispose(), post-promote PTY data would
          // continue calling our handleOutput → render → onOutputEvent (the
@@ -368971,7 +369506,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          // due to race conditions between the exit event and read operations.
          // This is a normal behavior on macOS/Linux and should not crash the app.
          // See: https://github.com/microsoft/node-pty/issues/178
-@@ -1861,68 +2081,47 @@
+@@ -1861,68 +2074,47 @@
            ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
              exited = true;
              abortSignal.removeEventListener('abort', abortHandler);
@@ -369055,7 +369590,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                }
              };
  
-@@ -2122,26 +2321,36 @@
+@@ -2122,26 +2314,36 @@
              } catch (cbErr) {
                debugLogger.warn(
                  `postPromote.onSettle threw: ${cbErr instanceof Error ? cbErr.message : String(cbErr)}`,
@@ -369103,7 +369638,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                );
              }
            }
-@@ -2152,12 +2361,24 @@
+@@ -2152,12 +2354,24 @@
                    exitCode,
                    signal,
                  }: {
@@ -369128,7 +369663,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                      endTime: Date.now(),
                    });
                  },
-@@ -2221,77 +2442,43 @@
+@@ -2221,77 +2435,43 @@
                  `before promote (rawOutput in the result still has the ` +
                  `bounded captured buffer the caller can re-render).`,
              );
@@ -369224,7 +369759,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                headlessTerminal.dispose();
              } catch (e) {
                debugLogger.warn(
-@@ -2389,35 +2576,30 @@
+@@ -2389,35 +2569,30 @@
  
          abortSignal.addEventListener('abort', abortHandler, { once: true });
        });
@@ -387848,7 +388383,7 @@ diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages
  - The command argument is required.
  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
  - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-+- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.
++- A foreground command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file. Bytes of a foreground command's output that are not UTF-8 are shown as U+FFFD, and its result says how many.
  
  - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
    - File search: Use glob (NOT find or ls)
@@ -387877,7 +388412,7 @@ diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages
  - The command argument is required.
  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
  - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-+- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.
++- A foreground command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file. Bytes of a foreground command's output that are not UTF-8 are shown as U+FFFD, and its result says how many.
  
  - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
    - File search: Use glob (NOT find or ls)
@@ -413561,7 +414096,171 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          }
        });
  
-@@ -2877,13 +2955,16 @@
+@@ -1004,13 +1082,13 @@
+           "sed -i 's/foo/bar/' file.txt",
+           '/test/dir',
+           expect.any(Function),
+           expect.any(AbortSignal),
+           false,
+           expect.objectContaining({}),
+-          { streamStdout: true },
++          { streamBytes: expect.any(Function) },
+         );
+         expect(result.llmContent).toContain('Background shell started.');
+         expect(result.llmContent).toContain('id: bg_');
+       });
+ 
+       it('falls back to shell execution when sed preview cannot read the file', async () => {
+@@ -1160,13 +1238,13 @@
+         'npm start',
+         '/test/dir',
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+       // Entry registered with the spawn pid.
+       expect(registry.register).toHaveBeenCalledTimes(1);
+       const entry = (registry.register as Mock).mock.calls[0][0];
+       expect(entry.command).toBe('npm start');
+       expect(entry.cwd).toBe('/test/dir');
+@@ -1176,12 +1254,43 @@
+       expect(entry.outputPath).toContain('shell-');
+       // Returns immediately with id + output path; agent's turn isn't blocked.
+       expect(result.llmContent).toContain(entry.shellId);
+       expect(result.llmContent).toContain(entry.outputPath);
+     });
+ 
++    it("writes a background command's bytes to its output file exactly as the command writes them", async () => {
++      const write = vi.fn();
++      vi.mocked(fs.createWriteStream).mockReturnValueOnce({
++        write,
++        end: vi.fn(),
++        on: vi.fn(),
++        once: vi.fn((event: string, handler: () => void) => {
++          if (event === 'finish') handler();
++        }),
++      } as unknown as fs.WriteStream);
++      const result = await shellTool
++        .build({ command: 'npm start', is_background: true })
++        .execute(mockAbortSignal);
++
++      const options = mockShellExecutionService.mock.calls[0]![6] as {
++        streamBytes: (chunk: Buffer) => void;
++      };
++      // An escape sequence, a byte that is not UTF-8 and binary output:
++      // nothing in the file is replaced or removed.
++      const chunk = Buffer.from([
++        0x1b, 0x5b, 0x33, 0x31, 0x6d, 0x61, 0xff, 0x00,
++      ]);
++      options.streamBytes(chunk);
++      expect(write).toHaveBeenCalledTimes(1);
++      expect(write).toHaveBeenCalledWith(chunk);
++      // The model is told so when the command starts.
++      expect(result.llmContent).toContain(
++        'The output file holds what the command writes to stdout and stderr, byte for byte as it writes it: escape sequences, bytes that are not UTF-8 and binary output are all kept.',
++      );
++    });
++
+     it('settles a background entry as completed when the process exits cleanly', async () => {
+       const registry = mockConfig.getBackgroundShellRegistry();
+       const invocation = shellTool.build({
+         command: 'true',
+         is_background: true,
+       });
+@@ -1565,13 +1674,13 @@
+         'npm run dev &&',
+         expect.any(String),
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+     });
+ 
+     it('preserves an escaped trailing \\& (literal &)', async () => {
+       const invocation = shellTool.build({
+         command: 'echo foo \\&',
+@@ -1582,13 +1691,13 @@
+         'echo foo \\&',
+         expect.any(String),
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+     });
+ 
+     it('preserves quoted trailing ampersands', async () => {
+       const invocation = shellTool.build({
+         command: `printf '&'`,
+@@ -1599,13 +1708,13 @@
+         `printf '&'`,
+         expect.any(String),
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+     });
+ 
+     it('preserves ampersands inside double-quoted script arguments', async () => {
+       const invocation = shellTool.build({
+         command: `node -e "console.log('&')"`,
+@@ -1616,13 +1725,13 @@
+         `node -e "console.log('&')"`,
+         expect.any(String),
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+     });
+ 
+     it('preserves ampersands inside command substitutions', async () => {
+       const invocation = shellTool.build({
+         command: `echo $(printf '&')`,
+@@ -1633,13 +1742,13 @@
+         `echo $(printf '&')`,
+         expect.any(String),
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+     });
+ 
+     it('does not forward the turn signal into the background shell', async () => {
+       // Verifies: the AbortSignal handed to ShellExecutionService is the
+       // entry's own controller, not the outer turn signal. Cancelling the
+@@ -1717,13 +1826,13 @@
+         command,
+         expect.any(String),
+         expect.any(Function),
+         expect.any(AbortSignal),
+         false,
+         expect.objectContaining({}),
+-        { streamStdout: true },
++        { streamBytes: expect.any(Function) },
+       );
+     });
+ 
+     it('should use the provided directory as cwd', async () => {
+       (mockConfig.getWorkspaceContext as Mock).mockReturnValue(
+         createMockWorkspaceContext('/test/dir'),
+@@ -2877,13 +2986,16 @@
        const result = await promise;
  
        expect(result.returnDisplay).toContain('failed output');
@@ -413578,7 +414277,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('reports a foreground signal termination as a tool error', async () => {
        const invocation = shellTool.build({
          command: 'signal-terminated-command',
-@@ -2900,13 +2981,15 @@
+@@ -2900,13 +3012,15 @@
  
        const result = await promise;
  
@@ -413594,7 +414293,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      });
  
      it('keeps a successful PTY exit code successful with signal 0 metadata', async () => {
-@@ -2944,12 +3027,360 @@
+@@ -2944,12 +3058,360 @@
  
        const result = await promise;
  
@@ -413955,7 +414654,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('does not report a user-cancelled signal as a tool error', async () => {
        const invocation = shellTool.build({
          command: 'cancelled-command',
-@@ -3062,191 +3493,12 @@
+@@ -3062,191 +3524,12 @@
  
        const result = await promise;
  
@@ -414147,7 +414846,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        // assume. Tests use vi fake timers to drive the wall-clock past
        // the threshold without actually sleeping. Hint must fire on
        // success AND error completions (advice is the same), suppress
-@@ -3281,12 +3533,24 @@
+@@ -3281,12 +3564,24 @@
          const result = await promise;
          expect(result.llmContent).toContain(
            'this foreground command ran for 60s',
@@ -414172,7 +414871,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // Empty-output success: write-only commands (e.g. `tar czf …`,
          // `cp -r large-dir/`, `dd if=…`) frequently produce no stdout
          // and exit 0. The non-debug `returnDisplayMessage` build leaves
-@@ -3485,116 +3749,12 @@
+@@ -3485,116 +3780,12 @@
          await vi.advanceTimersByTimeAsync(59_999);
          resolveShellExecution({ output: 'hi', exitCode: 0 });
          const result = await promise;
@@ -414289,7 +414988,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // run should NOT trigger the advisory — the user already told
          // us this command is allowed to run long. Pins the per-
          // invocation coupling so a regression that goes back to the
-@@ -7473,13 +7633,13 @@
+@@ -7473,13 +7664,13 @@
  
      it('should return the windows description when on windows', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
@@ -414304,7 +415003,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
        expect(shellTool.description).toContain(
          "DO NOT use ';' or newlines to separate commands in cmd.exe.",
-@@ -7488,27 +7648,85 @@
+@@ -7488,27 +7679,85 @@
          'Exact cmd.exe command to execute as `cmd.exe /d /s /c <command>`',
        );
      });
@@ -414327,13 +415026,13 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 +      expect(
 +        new ShellTool(mockConfig, INTERACTIVE_SESSION).description,
 +      ).toContain(
-+        "- A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops but dropped at the end of a line, a carriage return letting later text overwrite its line, anything the program cleared gone, and the whitespace at the end of the output trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.",
++        "- A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops but dropped at the end of a line, a carriage return letting later text overwrite its line, anything the program cleared gone, and the whitespace at the end of the output trimmed. To see it without that rendering, redirect the output to a file and read it with read_file. Bytes of a foreground command's output that are not UTF-8 are shown as U+FFFD, and its result says how many.",
 +      );
 +      vi.mocked(mockConfig.getShouldUseNodePtyShell).mockReturnValue(false);
 +      expect(
 +        new ShellTool(mockConfig, INTERACTIVE_SESSION).description,
 +      ).toContain(
-+        "- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file.",
++        "- A foreground command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see it without that rendering, redirect the output to a file and read it with read_file. Bytes of a foreground command's output that are not UTF-8 are shown as U+FFFD, and its result says how many.",
 +      );
 +    });
 +
@@ -414392,7 +415091,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
        expect(shellTool.description).toContain(
          'The active shell is PowerShell.',
-@@ -7530,13 +7748,13 @@
+@@ -7530,13 +7779,13 @@
      it('should describe pwsh when ComSpec points to pwsh.exe', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
        process.env['ComSpec'] = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
@@ -414407,7 +415106,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
        expect(shellTool.description).toContain(
          "use a single run_shell_command call with '&&'",
-@@ -7549,13 +7767,13 @@
+@@ -7549,13 +7798,13 @@
      it('should describe bash when Windows is running in Git Bash', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
        process.env['ComSpec'] = 'C:\\WINDOWS\\System32\\cmd.exe';
@@ -414422,7 +415121,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        expect(shellTool.description).toContain('ANSI-C quoting');
        expect(shellTool.description).not.toContain(
          'Command process group can be terminated',
-@@ -7750,12 +7968,13 @@
+@@ -7750,12 +7999,13 @@
          'Command timed out after 5000ms before it could complete.',
        );
        expect(result.returnDisplay).toContain('partial output');
@@ -414436,7 +415135,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('returns a structured timeout when the command produced no output', async () => {
        const invocation = shellTool.build({
          command: 'long-running-command',
-@@ -7798,22 +8017,13 @@
+@@ -7798,22 +8048,13 @@
          expect(result.error?.type).toBe(ToolErrorType.EXECUTION_TIMEOUT);
        } finally {
          vi.stubGlobal('AbortSignal', originalAbortSignal);
@@ -414460,7 +415159,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          timeout: 5000,
        });
        const mockCombinedSignal = {
-@@ -7828,33 +8038,36 @@
+@@ -7828,33 +8069,36 @@
          timeout: vi.fn().mockReturnValue(mockCombinedSignal),
          any: vi.fn().mockReturnValue(mockCombinedSignal),
        });
@@ -414555,7 +415254,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  } from '../services/commitAttribution.js';
  import { buildGitNotesCommand } from '../services/attributionTrailer.js';
  import type {
-@@ -68,36 +83,30 @@
+@@ -68,36 +83,51 @@
    type ShellType,
    splitCommands,
    stripShellWrapper,
@@ -414586,19 +415285,39 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
  const debugLogger = createDebugLogger('SHELL');
 -const DEFAULT_SHELL_OUTPUT_THRESHOLD = 30_000;
--
+ 
 -function getShellOutputThreshold(config: Config): number {
 -  return config.isTruncateToolOutputThresholdExplicit()
 -    ? config.getTruncateToolOutputThreshold()
 -    : DEFAULT_SHELL_OUTPUT_THRESHOLD;
 -}
++/**
++ * What a background command's output file holds, as the model is told it
++ * when the command starts: the command's bytes, not a rendering of them, so
++ * nothing in the file is replaced or removed and nothing needs counting.
++ * Each reader of the file states what it shows of it -- read_file refuses a
++ * file that is not UTF-8, naming how to read it, and the completion
++ * notification's tail counts what it could not show (`readOutputTail`).
++ */
++const BACKGROUND_OUTPUT_FILE =
++  'The output file holds what the command writes to stdout and stderr, byte for byte as it writes it: escape sequences, bytes that are not UTF-8 and binary output are all kept.';
++
++/**
++ * What a promoted command's output file holds. It is a rendering, unlike a
++ * command started in the background: the snapshot is the output as the
++ * foreground result would have shown it, and what follows is decoded and
++ * has its escape sequences removed. The bytes it showed as U+FFFD are not
++ * counted.
++ */
++const PROMOTED_OUTPUT_FILE =
++  'The file holds the output as the foreground result would have shown it up to the promote, then what the command writes after it with its escape sequences removed; bytes that are not UTF-8 are written as U+FFFD, uncounted.';
  
  /**
   * Model-facing liveness guidance shared verbatim by both background
   * launch paths (`executeBackground` and the foreground→background
   * promote), so the two copies cannot drift (#7626).
   */
-@@ -1197,41 +1206,77 @@
+@@ -1197,41 +1227,77 @@
          bg: '',
        },
      ],
@@ -414687,7 +415406,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
   * `sleep 5 && check`, `sleep 5; check`, `sleep 5 # wait` -- but not sleep
   * inside pipelines, subshells, backgrounded commands, or scripts (those are
   * fine).
-@@ -1239,12 +1284,16 @@
+@@ -1239,12 +1305,16 @@
  export function detectBlockedSleepPattern(command: string): string | null {
    return detectBlockedSleepPatternDetails(command)?.description ?? null;
  }
@@ -414704,7 +415423,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
  function detectBlockedSleepPatternDetails(
    command: string,
-@@ -1293,32 +1342,36 @@
+@@ -1293,32 +1363,36 @@
      trimmedComment?.startsWith(INTENTIONAL_SLEEP_COMMENT_PREFIX)
    ) {
      const reason = getIntentionalSleepReason(trimmedComment);
@@ -414742,7 +415461,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  const MAX_INTENTIONAL_SLEEP_SECONDS = 10 * 60;
  // Require a real reason, not a trivial opt-out like "wait".
  const MIN_INTENTIONAL_SLEEP_REASON_LENGTH = 8;
-@@ -1663,25 +1716,100 @@
+@@ -1663,25 +1737,100 @@
    ) {
      return reason.name;
    }
@@ -414844,7 +415563,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    private getSedEditInfo(): SedEditInfo | null {
      if (
-@@ -1702,21 +1830,28 @@
+@@ -1702,21 +1851,28 @@
        return filePath;
      }
      const cwd = this.params.directory || this.config.getTargetDir();
@@ -414880,7 +415599,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          priorReadResult.type,
        );
      }
-@@ -1742,16 +1877,16 @@
+@@ -1742,16 +1898,16 @@
  
      return {
        filePath,
@@ -414901,7 +415620,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
    private makeSedEditDisplay(edit: PreparedSedEdit): FileDiff {
      const diffStat = getDiffStat(
        edit.fileName,
-@@ -1772,43 +1907,48 @@
+@@ -1772,43 +1928,48 @@
        newContent: edit.newContent,
        diffStat,
      };
@@ -414961,7 +415680,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    private waitForSedOperation<T>(
      operation: () => Promise<T>,
-@@ -1844,17 +1984,21 @@
+@@ -1844,17 +2005,21 @@
            reject(err);
          },
        );
@@ -414984,7 +415703,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          () => this.prepareSedEdit(sedInfo),
          signal,
        );
-@@ -1863,34 +2007,36 @@
+@@ -1863,34 +2028,36 @@
        if (err instanceof SedEditCancelledError) {
          return this.sedEditCancelledResult(signal, effectiveTimeout);
        }
@@ -415025,7 +415744,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      if (
        this.preparedSedEdit?.filePath === edit.filePath &&
-@@ -1902,13 +2048,13 @@
+@@ -1902,13 +2069,13 @@
        };
      }
  
@@ -415040,7 +415759,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      const display = this.makeSedEditDisplay(edit);
      let fileHistoryBackupRecorded = false;
-@@ -1971,13 +2117,13 @@
+@@ -1971,13 +2138,13 @@
            `file read cache recordWrite failed for sed edit ${edit.filePath}: ${getErrorMessage(err)}`,
          );
          // Non-fatal: a future read can refresh the cache from disk.
@@ -415055,7 +415774,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        if (err instanceof SedEditCancelledError) {
          return this.sedEditCancelledResult(signal, effectiveTimeout);
        }
-@@ -1997,13 +2143,13 @@
+@@ -1997,13 +2164,13 @@
            message = `No space left on device while writing sed edit to file: ${edit.filePath} (${err.code})`;
          } else if (err.code === 'EISDIR') {
            type = ToolErrorType.TARGET_IS_DIRECTORY;
@@ -415070,7 +415789,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
    getDescription(): string {
      let description = `${this.params.command}`;
      // append optional [in directory]
-@@ -2209,18 +2355,23 @@
+@@ -2209,18 +2376,23 @@
      signal: AbortSignal,
      updateOutput?: (output: ToolResultDisplay) => void,
      shellExecutionConfig?: ShellExecutionConfig,
@@ -415096,7 +415815,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      if (this.params.is_background) {
        return this.executeBackground(signal, shellExecutionConfig);
-@@ -2270,19 +2421,20 @@
+@@ -2270,19 +2442,20 @@
        if (this.preparedSedEdit) {
          debugLogger.debug('executing simulated sed edit', {
            command: this.params.command,
@@ -415124,7 +415843,33 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          { command: this.params.command },
        );
      }
-@@ -2726,68 +2878,97 @@
+@@ -2518,19 +2691,18 @@
+         // owned by the foreground stream, which by promote-time has
+         // already terminated.
+         //
+         // PR-2.5 wave-4: strip ANSI before writing so
+         // the post-promote tail of `bg_xxx.output` matches the format
+         // of the snapshot above (which is rendered terminal text, not
+-        // raw escape sequences) AND matches the regular
+-        // `executeBackground` path's `outputStream.write(stripAnsi(chunk))`
+-        // contract. Without this, an agent reading the file after a
+-        // promote would see plain text up to the promote moment, then
+-        // raw `\x1b[...m` color codes / cursor moves / clear-screen
+-        // sequences for any post-promote output — which is unreadable
+-        // and inconsistent.
++        // raw escape sequences). Without this, an agent reading the file
++        // after a promote would see plain text up to the promote moment,
++        // then raw `\x1b[...m` color codes / cursor moves / clear-screen
++        // sequences for any post-promote output. Unlike a command started
++        // in the background, which writes its bytes, the promoted file is
++        // a rendering, and the promote result says so (PROMOTED_OUTPUT_FILE).
+         const rawChunk =
+           typeof event.chunk === 'string'
+             ? event.chunk
+             : event.chunk
+                 .map((line) => line.map((tok) => tok.text).join(''))
+                 .join('\n');
+@@ -2726,68 +2898,97 @@
        result.aborted &&
        getShellAbortReasonKind(combinedSignal.reason) === 'background';
      const timeoutSummary = wasTimeout
@@ -415251,7 +415996,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // span the entire amended commit (the amended commit's parent
        // is the original's parent, so diffing against it lumps both
        // commits' worth of changes). Detect the flag so
-@@ -2875,13 +3056,13 @@
+@@ -2875,13 +3076,13 @@
      // The pre-existing debug snapshot is captured here (pre-truncation,
      // pre-hint); both subsequent steps APPEND to it rather than
      // replacing, so all information accumulates rather than being lost
@@ -415266,7 +416011,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
            ? `${timeoutSummary}\n${result.output}`
            : result.output;
        } else {
-@@ -2902,106 +3083,51 @@
+@@ -2902,106 +3103,51 @@
          }
          // If output is empty and command succeeded (code 0, no error/signal/abort),
          // returnDisplayMessage will remain empty, which is fine.
@@ -415394,7 +416139,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // shellExecutionService.ts); non-zero exits leave it null. Real
      // spawn failures (ENOENT, permission denied) typically resolve in
      // <1s, so the elapsed >= threshold + spawn-error combination is
-@@ -3012,46 +3138,44 @@
+@@ -3012,46 +3158,44 @@
      //
      // Use a `---` divider line so downstream consumers of
      // `error.message` (firePostToolUseFailureHook, telemetry grouping,
@@ -415460,7 +416205,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Foreground → background promote handler. Called when the foreground
-@@ -3073,13 +3197,13 @@
+@@ -3073,13 +3217,13 @@
    private async handlePromotedForeground(
      result: ShellExecutionResult,
      cwd: string,
@@ -415475,7 +416220,17 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      const outputDir = path.join(
        this.config.storage.getProjectTempDir(),
        'background-shells',
-@@ -3548,14 +3672,16 @@
+@@ -3539,23 +3683,26 @@
+       ? `Process has already exited; no \`task_stop\` needed (the entry is observable in \`/tasks\` for inspection).`
+       : `To stop the now-background process: \`task_stop({ task_id: '${shellId}' })\`.`;
+     const llmContent = [
+       `Foreground command "${commandToExecute}" promoted to background as ${shellId}.`,
+       statusLine,
+       `Output snapshot at promote time saved to: ${outputPath}`,
++      PROMOTED_OUTPUT_FILE,
+       statusFileLine,
+       inspectLine,
+       stopLine,
      ].join('\n');
  
      debugLogger.debug(
@@ -415493,7 +416248,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Background-execution path: spawn the command into a managed registry
-@@ -3564,13 +3690,13 @@
+@@ -3564,13 +3711,13 @@
     * AbortController; the registry's terminal status is set when the process
     * exits. Returns immediately so the agent's turn isn't blocked.
     */
@@ -415508,7 +416263,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // the post-command attribution path — there's no clean place to
      // hook pre/post-HEAD comparison and `git notes` writes between
      // the early `Background shell started` return and the eventual
-@@ -3581,16 +3707,19 @@
+@@ -3581,16 +3728,19 @@
      //
      // Use the broader `hasCommit` flag rather than `attributableInCwd`:
      // `cd /elsewhere && git commit` should still be refused even
@@ -415532,7 +416287,53 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      }
      // Strip a single bare trailing `&` (the bash background operator) before
      // spawn: bash treats it as background-detach, exits the wrapper
-@@ -3764,21 +3893,30 @@
+@@ -3666,34 +3816,29 @@
+       abortController: entryAc,
+     };
+ 
+     const { result: resultPromise, pid } = await ShellExecutionService.execute(
+       processedCommand,
+       cwd,
+-      (event: ShellOutputEvent) => {
+-        if (event.type === 'data' && typeof event.chunk === 'string') {
+-          // Strip ANSI escape codes (color, cursor-move, clear-screen) before
+-          // writing — agents read the file as plain text, and dev servers /
+-          // build tools spam plenty of escape sequences that would render as
+-          // garbage. Costs ~one regex per chunk; cheap relative to disk I/O.
+-          outputStream.write(stripAnsi(event.chunk));
+-        }
+-        // ANSI array chunks and binary streams are not written to the output
+-        // file: agents read the file as plain text and binary spam would be
+-        // unhelpful.
+-      },
++      // A streaming execution emits no output events: the output goes to
++      // the file, below.
++      () => {},
+       entryAc.signal,
+       // Background shells are non-interactive by design — no terminal to
+       // attach a PTY to, no human to type at it. Force the child_process
+       // path so we don't pull in node-pty for fire-and-forget commands.
+       false,
+       shellExecutionConfig ?? {},
+-      // Stream stdout/stderr through to the output file as chunks arrive.
+-      // Default child_process mode buffers until exit, which would leave
+-      // dev-server / watcher output files empty until the process dies.
+-      { streamStdout: true },
++      // Every byte the command writes to stdout and stderr goes to the
++      // output file as it arrives, exactly as written: escape sequences,
++      // bytes that are not UTF-8 and binary output are kept, since the
++      // file is the command's output and not a rendering of it, and
++      // whatever reads it says what it shows (BACKGROUND_OUTPUT_FILE).
++      // Capturing until exit would leave a dev server's or watcher's
++      // output file empty until the process dies.
++      { streamBytes: (chunk) => outputStream.write(chunk) },
+     );
+ 
+     if (pid !== undefined) registration.pid = pid;
+     const registry = this.config.getBackgroundShellRegistry();
+     // Symmetric with the promote path above: `register` is internally
+     // safe today (Map.set + emit), but a throwing subscriber would
+@@ -3764,21 +3909,31 @@
          endStreamThenSettle(outputStream, 'background', shellId, () =>
            registry.fail(shellId, getErrorMessage(err), endTime),
          );
@@ -415560,6 +416361,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 +          pidLine,
 +          harnessText(
 +            `output file: ${outputPath}\n` +
++              `${BACKGROUND_OUTPUT_FILE}\n` +
 +              `${statusFileGuidance(outputPath)}\n` +
 +              backgroundShellInspection(this.session.interactionMode),
 +          ),
@@ -415571,7 +416373,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Count the commits between `preHead` (exclusive) and `postHead`
-@@ -3912,13 +4050,13 @@
+@@ -3912,13 +4067,13 @@
     * the Co-authored-by trailer and the git-notes payload).
     */
    private async attachCommitAttribution(
@@ -415586,7 +416388,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // analysis) drops the AI-attribution note. Returns null when the
      // skip is intentional / inherent to the situation (no commit
      // landed, multi-commit chain, attribution toggle off, no tracked
-@@ -4002,13 +4140,15 @@
+@@ -4002,13 +4157,15 @@
      // NOT also delete the per-file attribution data the user might
      // need to amend & retry. `shouldClear` flips to the partial-clear
      // set only on (a) note-write success, or (b) attribution toggle
@@ -415603,7 +416405,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // diff calls are SHA-pinned so a post-commit hook / chained
        // `git tag` / parallel git process moving HEAD between the
        // analysis phase and the note write can't leave the note
-@@ -4028,16 +4168,17 @@
+@@ -4028,16 +4185,17 @@
        // wholesale clear here, but that erased pending unstaged AI
        // edits for files outside the just-failed commit; the
        // smaller-evil trade-off is documented in the finally block.)
@@ -415624,7 +416426,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // Pass the actual model name (e.g. `qwen3-coder-plus`) rather than the
        // co-author display label so the note's `generator` field reflects
        // which model produced the changes — and so generateNotePayload's
-@@ -4179,16 +4320,17 @@
+@@ -4179,16 +4337,17 @@
        const notesCommand = buildGitNotesCommand(note, postHead);
  
        if (!notesCommand) {
@@ -415645,7 +416447,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          return warning;
        }
  
-@@ -4238,23 +4380,41 @@
+@@ -4238,23 +4397,41 @@
          child.on('error', () => {});
        });
  
@@ -415696,7 +416498,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          // without losing attribution data they'd need to reproduce.
        } else {
          debugLogger.debug(
-@@ -4265,15 +4425,17 @@
+@@ -4265,15 +4442,17 @@
          shouldClear = committedAbsolutePaths;
        }
      } catch (err) {
@@ -415717,7 +416519,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // user disabled the toggle). `shouldClear` stays null when the
        // note was skipped (oversized payload, non-zero exit, exception)
        // so the user can amend & retry without their per-file
-@@ -4923,14 +5085,19 @@
+@@ -4923,14 +5102,19 @@
  }
  
  function getShellCommandSequencingGuidance({
@@ -415738,7 +416540,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        return `- When issuing multiple commands:
    ${independentGuidance}
    - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before run_shell_command for git operations, or git add before git commit), run these operations sequentially instead.
-@@ -4963,30 +5130,51 @@
+@@ -4963,30 +5147,51 @@
        const _exhaustive: never = shell;
        return _exhaustive;
      }
@@ -415767,7 +416569,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 +): string {
 +  const outputRendering = runsInTerminal
 +    ? "A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops but dropped at the end of a line, a carriage return letting later text overwrite its line, anything the program cleared gone, and the whitespace at the end of the output trimmed."
-+    : "A command's output is shown with its escape sequences removed and the whitespace around it trimmed.";
++    : "A foreground command's output is shown with its escape sequences removed and the whitespace around it trimmed.";
    const shellConfiguration = getShellConfiguration();
    const executionWrapper = getShellExecutionWrapper(shellConfiguration);
    const isWindows = os.platform() === 'win32';
@@ -415786,14 +416588,14 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  - The command argument is required.
  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
  - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-+- ${outputRendering} To see it without that rendering, redirect the output to a file and read it with ${ToolNames.READ_FILE}.
++- ${outputRendering} To see it without that rendering, redirect the output to a file and read it with ${ToolNames.READ_FILE}. Bytes of a foreground command's output that are not UTF-8 are shown as U+FFFD, and its result says how many.
  
  - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
    - File search: Use ${ToolNames.GLOB} (NOT find or ls)
    - Content search: Use ${ToolNames.GREP} (NOT grep or rg)
    - Read files: Use ${ToolNames.READ_FILE} (NOT cat/head/tail)
    - Edit files: Use ${ToolNames.EDIT} (NOT sed/awk)
-@@ -5036,25 +5224,32 @@
+@@ -5036,37 +5241,44 @@
      }
    }
  }
@@ -415833,7 +416635,20 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          properties: {
            command: {
              type: 'string',
-@@ -5078,76 +5273,97 @@
+             description: getCommandDescription(),
+           },
+           is_background: {
+             type: 'boolean',
+             description:
+-              'Optional: Whether to run the command in background. If not specified, defaults to false (foreground execution). Explicitly set to true for long-running processes like development servers, watchers, or daemons that should continue running without blocking further commands.',
++              "Optional: Whether to run the command in background. If not specified, defaults to false (foreground execution). Explicitly set to true for long-running processes like development servers, watchers, or daemons that should continue running without blocking further commands. A background command's output goes to an output file byte for byte as the command writes it, unrendered: escape sequences, bytes that are not UTF-8 and binary output are kept. When it ends, its notification shows the end of that file, at most 8 KiB, as text with its trailing whitespace trimmed, and its output-tail counts, where there are any, the bytes that are not UTF-8, shown as U+FFFD (not-utf8-bytes), and the control and bidirectional-formatting characters removed (removed-characters).",
+           },
+           timeout: {
+             type: 'number',
+             description: 'Optional timeout in milliseconds (max 600000)',
+           },
+           description: {
+@@ -5078,76 +5290,97 @@
              type: 'string',
              description:
                '(OPTIONAL) The absolute path of the directory to run the command in. If not provided, the project root directory is used. Must be a directory within the workspace and must already exist.',
@@ -415943,7 +416758,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // (directory, read-only, command-root extraction, etc.).
      if (!params.is_background) {
        const sleepPattern = detectBlockedSleepPatternDetails(strippedCommand);
-@@ -5155,27 +5371,49 @@
+@@ -5155,27 +5388,49 @@
          const intentionalSleepGuidance =
            sleepPattern.intentionalSleepRejection ??
            (sleepPattern.isStandalone

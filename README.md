@@ -725,7 +725,10 @@ A terminal conversation and a headless conversation share the same obligations:
   output as UTF-8, the encoding of the terminal the command writes to, never as
   an encoding guessed from the bytes, and states how many bytes were not UTF-8 —
   each sequence shown as U+FFFD — and the command that shows them. What it
-  shows is the terminal's rendering, not the bytes. The shell tool's
+  shows is the terminal's rendering, not the bytes. A background command's
+  output file is the bytes, escape sequences, bytes that are not UTF-8 and
+  binary output included, and the model is told so when it starts; the
+  completion notification's tail counts what its text cannot show. The shell tool's
   description tells the model so, clause by clause, and how to see the output
   without that rendering, so text it copies from a command's output into an
   `edit` is not taken for the file's; each clause it states is held to what the

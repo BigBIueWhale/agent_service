@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `f29e9ec748ae510da4e45cb5fe16f1ad059749b312caf2c29191c1fd8e531ac1`
+- Review-diff SHA-256: `885f9fc35cce650d0fbc4564681f43807a597787a3a228318834baa3cfd93f9b`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `55dda5c77fae5cb7774572080738f74efbaf66cc429a5023380ea9f0d6046255`
+- Transformer-manifest SHA-256: `0760c8e44564779729d56115360152df683bca9b286c8be544f42680930e02c3`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -408,7 +408,16 @@ process's output -- every background command -- as the encoding chardet guessed
 from its first chunk, so one stray byte turned every later UTF-8 line into
 mojibake. The pty now hands the bytes over undecoded, and the bytes that are not
 UTF-8, each sequence shown as one U+FFFD, are counted and stated after the
-output with the command that shows them. A command the configuration runs in a
+output with the command that shows them. A background command's output is not
+rendered at all: every byte it writes goes to its output file as it wrote it,
+where upstream decoded each chunk, stripped its escape sequences and stopped
+writing at the first sign of binary output, with nothing said of any of it.
+The model is told so when the command starts, and the completion
+notification's tail, the one place those bytes become text, counts the bytes
+that are not UTF-8 and the control characters it removes. A promoted command's
+file is still the foreground's rendering, and its result says so, uncounted;
+the one other streaming caller, a client's user shell, decodes each stream
+itself. A command the configuration runs in a
 pseudo-terminal runs in one or fails: a pty or terminal that cannot load, or a
 spawn that fails, is that call's error, and startup refuses a configuration
 whose pty cannot load, where upstream ran the command as a child process

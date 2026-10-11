@@ -12870,6 +12870,64 @@ def _validate_shell_output_completeness_before(state: State) -> None:
 
 def _validate_shell_output_completeness_after(state: State) -> None:
     label = "shell output completeness result"
+    # A background command's output file is its bytes: streaming hands every
+    # chunk to the caller undecoded, before anything is captured or sniffed,
+    # and the background launch writes each as it arrives. What the model is
+    # told of the file is true, and the notification's tail counts what its
+    # text does not show.
+    _require_all(
+        state,
+        _SHELL_SERVICE,
+        (
+            "  streamBytes?: (chunk: Buffer, stream: 'stdout' | 'stderr') => void;",
+            "          if (streamBytes) {\n"
+            "            // Streaming: the caller holds the output, byte for byte as the\n"
+            "            // command wrote it, so nothing here decodes, captures or sniffs.\n"
+            "            totalOutputBytes += data.length;\n"
+            "            streamBytes(data, stream);\n"
+            "            return;\n"
+            "          }",
+        ),
+        label=label,
+    )
+    forbid_text(state, _SHELL_SERVICE, "streamStdout", label=label)
+    _require_all(
+        state,
+        "packages/core/src/tools/shell.ts",
+        (
+            "      { streamBytes: (chunk) => outputStream.write(chunk) },",
+            "  'The output file holds what the command writes to stdout and stderr, byte for byte as it writes it: escape sequences, bytes that are not UTF-8 and binary output are all kept.';",
+            "              `${BACKGROUND_OUTPUT_FILE}\\n` +",
+            "      PROMOTED_OUTPUT_FILE,",
+        ),
+        label=label,
+    )
+    forbid_text(state, "packages/core/src/tools/shell.ts",
+                "outputStream.write(stripAnsi(event.chunk))", label=label)
+    # The one other streaming caller, a client's user shell, decodes each
+    # stream as every command's output is decoded.
+    require_text(state, "packages/acp-bridge/src/bridge.ts",
+                 "publishOutput(decoders[stream].decode(bytes, { stream: true })),",
+                 label=label)
+    _require_all(
+        state,
+        "packages/core/src/services/backgroundShellRegistry.ts",
+        (
+            "    const notUtf8Bytes = countNonUtf8Bytes(bytes);",
+            "            ? ` not-utf8-bytes=\"${outputTail.notUtf8Bytes}\"`",
+            "            ? ` removed-characters=\"${outputTail.removedCharacters}\"`",
+        ),
+        label=label,
+    )
+    for path, case in (
+        ("packages/core/src/services/shellExecutionService.test.ts",
+         "streams every byte the command writes, as written, and captures none of it"),
+        ("packages/core/src/tools/shell.test.ts",
+         "writes a background command's bytes to its output file exactly as the command writes them"),
+        ("packages/core/src/services/backgroundShellRegistry.test.ts",
+         "counts on the output-tail what its text does not show of the bytes"),
+    ):
+        require_text(state, path, case, label=label)
     # The pty master ends where the kernel says the output ends. libuv takes a
     # hang-up with a read short of its buffer as the end, but a pty master
     # returns at most one line-discipline buffer per read, so the read side
@@ -14047,7 +14105,15 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "true total and the command to run instead. The output is decoded as UTF-8, the "
             "encoding of the terminal it was written to, never as an encoding guessed from its "
             "bytes; the pty hands the bytes over undecoded, and the bytes that are not UTF-8, each "
-            "sequence shown as U+FFFD, are counted and stated with the command that shows them."
+            "sequence shown as U+FFFD, are counted and stated with the command that shows them. A "
+            "background command's output is not rendered at all: every byte it writes goes to its "
+            "output file as it wrote it, escape sequences, bytes that are not UTF-8 and binary "
+            "output included, where its chunks were decoded, stripped and stopped at binary "
+            "output with nothing said; it is told so when the command starts, and the completion "
+            "notification's tail, the one place those bytes become text, counts the bytes that "
+            "are not UTF-8 and the characters it removes. A promoted command's file is a "
+            "rendering, and its result says so. The one other streaming caller, a client's user "
+            "shell, decodes each stream itself, as every command's output is decoded."
         ),
         removal_condition=(
             "The pinned Node.js libuv reads a pty master to its end before reporting a hang-up as "
