@@ -11,6 +11,7 @@ require_release_commit
 require_clean_committed_repository
 "${PROJECT_DIR}/scripts/check-documented-identifiers.sh"
 "${PROJECT_DIR}/scripts/check-documented-identity.sh"
+"${PROJECT_DIR}/scripts/check-served-refusals.sh"
 "${PROJECT_DIR}/scripts/test-common.sh"
 "${PROJECT_DIR}/scripts/test-submission.sh"
 "${PROJECT_DIR}/scripts/test-release.sh"

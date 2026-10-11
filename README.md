@@ -1256,7 +1256,15 @@ refused it and what to do instead. The notice names neither the call nor what
 it held, so it carries no text the model wrote. The client reads the refusal by
 its type alone; any other error the backend serves inside the stream, a 5xx
 among them, is the backend's own failure and ends the run as
-`error_during_execution`. Four refused draws of a turn in a row, of any cause
+`error_during_execution`. Which types it reads is held to the backend: the
+backend pins the types its tree's refusals declare as
+`SERVED_TOOL_CALL_REFUSAL_TYPES` in its `config/runtime-v1.sh`, refusing in its
+own `build-vllm.sh` a tree that declares others, and `./build.sh` runs
+`scripts/check-served-refusals.sh`, which reads that pin from the backend
+checkout the stack lock names, at its HEAD and only where that lock pins the
+backend image this one pins, and refuses a `SERVED_TURN_REFUSALS` whose types
+are not exactly those -- read by the certifier's own reader, so a type added,
+renamed or removed on one side alone stops a build on one side or the other. Four refused draws of a turn in a row, of any cause
 -- the bound every refused answer is drawn under, a compaction's snapshot draws
 included -- end the run as `error_incomplete_generation`: a limit that keeps
 being reached is a turn that will not fit, or reasoning that has degenerated, a

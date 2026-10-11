@@ -8,6 +8,11 @@
 //! them from that declaration, in the file the reviewed client patch writes,
 //! and the certifier has no list of its own. The declaration is read only in
 //! its own shape; anything else stops the build, naming what it found.
+//!
+//! Which types the table holds is the backend's to say: `./build.sh` runs
+//! `scripts/check-served-refusals.sh`, which reads them with this reader
+//! (`examples/served_turn_refusals.rs`) and refuses a table whose types are
+//! not exactly the ones the backend lock pins as those it serves.
 
 /// The reviewed client patch, from the engine's crate directory.
 pub(crate) const PATCH: &str = "../../patches/qwen-code-0.21.12-agent-service.patch";
