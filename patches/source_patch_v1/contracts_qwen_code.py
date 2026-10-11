@@ -5391,6 +5391,33 @@ def _validate_compaction_budget_after(state: State) -> None:
         f"{', '.join(p for p in measuring if p != limits) or 'nowhere, not even there'}. "
         f"One helper measures, tokenizerText, and everything uses it.",
     )
+    # The tests' counter is the served tokenizer's count, recorded for every
+    # text they count and refused for any other; a bound is held where text
+    # runs one byte a token and where it runs six.
+    counter = "packages/core/src/test-utils/token-counter.ts"
+    _require_all(
+        state,
+        counter,
+        (
+            "import recorded from './served-token-counts.json' with { type: 'json' };",
+            "export function servedTokens(text: string): number {",
+            "a test counter never estimates.",
+        ),
+        label=label,
+    )
+    forbid_text(state, counter, "fourBytesPerToken", label=label)
+    require_text(
+        state,
+        "packages/core/src/test-utils/served-token-counts.json",
+        '"sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"',
+        label=label,
+    )
+    for test_path, name in (
+        ("packages/core/src/core/toolResultBound.test.ts", "cuts a result at one byte a token that is within four times M bytes"),
+        ("packages/core/src/core/toolResultBound.test.ts", "hands on whole a result at six bytes a token, six times M bytes long"),
+        (limits_test, "takes as many whole lines as the counts say fit"),
+    ):
+        require_text(state, test_path, name, label=label)
     # The counterexample that refutes the old statement is kept as a test
     # wherever a bound is taken.
     for test_path, name in (
@@ -13851,7 +13878,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "governs compaction. Original authored inputs are retained independently of model "
             "summaries and carried in the snapshot's all_user_messages; summaries must declare the "
             "snapshot's other sections, upstream's, in upstream's order. No phase budget "
-            "forces reasoning to stop."
+            "forces reasoning to stop. The tests count text as the served tokenizer does: every "
+            "text they count has its count recorded with it, and the counter refuses one it has "
+            "none of, where it counted four bytes a token, a rate under which a bound's shortcut "
+            "sound only at four bytes a token passed every test."
         ),
         removal_condition=(
             "Upstream provides the same sized turn room with a refused turn drawn again, a preamble "
