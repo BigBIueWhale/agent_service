@@ -271802,7 +271802,25 @@ diff --git a/packages/core/src/core/nonInteractiveToolExecutor.test.ts b/package
    it('should return an unhandled exception error if execution throws', async () => {
      const request: ToolCallRequestInfo = {
        callId: 'call5',
-@@ -402,12 +414,14 @@
+@@ -354,12 +366,17 @@
+         {
+           functionResponse: {
+             name: 'testTool',
+             id: 'call5',
+             response: { error: 'Something went very wrong' },
+           },
++          // What the tool threw states its author: the client's code raised
++          // a plain Error, so the text the model reads is the harness's.
++          authors: [
++            { author: 'harness', length: 'Something went very wrong'.length },
++          ],
+         },
+       ],
+     });
+   });
+ 
+   it('should correctly format llmContent with inlineData', async () => {
+@@ -402,12 +419,14 @@
                output: '',
              },
              parts: [
