@@ -23,7 +23,7 @@ class HeadlessSmokeTests(unittest.TestCase):
             "parts": [
                 {"text": "  **raw thought**\n", "thought": True},
                 {"text": "before  after"},
-                {"functionCall": {"id": "provider__qwen_dup_2", "name": "audit_probe", "args": {"value": 1.0}}},
+                {"functionCall": {"id": "provider__qwen_dup_2", "name": "audit_probe", "arguments": '{"value": 1.0}'}},
             ],
         })
 

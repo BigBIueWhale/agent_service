@@ -234,10 +234,7 @@ impl PartialStreamState {
                             .ok_or_else(|| {
                                 refusal("tool claim has no normalized generation call")
                             })?;
-                        if self.called.contains(id)
-                            || call.name.as_deref() != Some(name)
-                            || call.arguments.is_none()
-                        {
+                        if self.called.contains(id) || call.name.as_deref() != Some(name) {
                             return Err(refusal(
                                 "tool claim has no unique normalized generation call",
                             ));
@@ -251,7 +248,7 @@ impl PartialStreamState {
                             ));
                         }
                         block.call = Some(PartialCall {
-                            expected: Arc::from(call.arguments.as_deref().unwrap()),
+                            expected: Arc::from(call.arguments.as_str()),
                             observed: 0,
                         });
                         self.called.insert(id.into());

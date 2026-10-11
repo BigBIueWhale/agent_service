@@ -1394,7 +1394,7 @@ impl RuntimeContract {
                                     structured_input: if call.name.as_deref()
                                         == Some("structured_output")
                                     {
-                                        call.arguments.as_deref().map(Arc::from)
+                                        Some(Arc::from(call.arguments.as_str()))
                                     } else {
                                         None
                                     },
@@ -2045,7 +2045,7 @@ mod tests {
         serde_json::json!({
             "response":{
                 "candidates":[{"content":{"parts":[{"functionCall":{
-                    "id":"snapshot-call","name":"state_snapshot","args":compaction_sections()
+                    "id":"snapshot-call","name":"state_snapshot","arguments":compaction_sections().to_string()
                 }}],"role":"model"},"index":0,"safetyRatings":[],"finishReason":"STOP"}],
                 "usageMetadata":{"promptTokenCount":24,"candidatesTokenCount":4,
                     "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28}
@@ -2146,7 +2146,7 @@ mod tests {
     /// The block the fixture's draw declares, as the model wrote it.
     fn compaction_block() -> String {
         crate::model_requests::snapshot_text(&[serde_json::json!({
-            "name":"state_snapshot","args":compaction_sections()
+            "name":"state_snapshot","arguments":compaction_sections().to_string()
         })])
         .expect("a complete snapshot")
     }
@@ -2324,7 +2324,7 @@ mod tests {
         success["data"]["output"] = serde_json::json!({
             "maxOutputTokens":8, "physicalRequests":1,
             "operationId":"compaction-operation", "functionCalls":[{
-                "id":"snapshot-call","name":"state_snapshot","args":compaction_sections()}],
+                "id":"snapshot-call","name":"state_snapshot","arguments":compaction_sections().to_string()}],
             "text":"", "reasoning":"", "sdkValuesJson":[compaction_provider_value()],
             "newTokenCount":12, "snapshotTokens":COMPACTION_BLOCK_TOKENS,
             "snapshotCountOperationId":"snapshot-count",
@@ -3693,6 +3693,37 @@ mod tests {
         rows
     }
 
+    /// A generation records each call as the text its arguments were served
+    /// as and nothing parsed from it: a recorded call that carries a value
+    /// beside its text, holds no text, or holds text that is no one object
+    /// every value of which is exact -- a key twice, a number past the finite
+    /// range -- is refused where the generation is read.
+    #[test]
+    fn a_recorded_call_is_the_one_object_its_arguments_were_served_as() {
+        let call = |envelope: &mut serde_json::Value| -> serde_json::Value {
+            envelope["observations"][2]["response"]["candidates"][0]["content"]["parts"][1]["functionCall"].take()
+        };
+        for edit in [
+            (|call: &mut serde_json::Value| call["args"] = serde_json::json!({"value":1.0})) as fn(&mut serde_json::Value),
+            |call| {
+                call.as_object_mut().unwrap().remove("arguments");
+            },
+            |call| call["arguments"] = serde_json::json!(r#"{"value": 1.0, "value": 2}"#),
+            |call| call["arguments"] = serde_json::json!(r#"{"value": 1e400}"#),
+            |call| call["arguments"] = serde_json::json!("[1.0]"),
+        ] {
+            let mut rows = fixture();
+            rewrite_generation(&mut rows, |envelope| {
+                let mut taken = call(envelope);
+                edit(&mut taken);
+                envelope["observations"][2]["response"]["candidates"][0]["content"]["parts"][1]["functionCall"] = taken;
+            });
+            let (at, cause) = first_refusal(&rows).unwrap_err();
+            assert_eq!(at, position(&rows, "model_generation"), "{cause}");
+            assert!(cause.contains("an observed call is not the one JSON object its arguments were served as"), "{cause}");
+        }
+    }
+
     #[test]
     fn the_wire_fixture_is_a_complete_stream_of_the_compiled_contract() {
         let rows: Vec<serde_json::Value> =
@@ -3807,6 +3838,43 @@ mod tests {
             let (index, refusal) = first_refusal(&mutant).expect_err(name);
             assert_eq!(index, line, "{name}: {refusal}");
             assert!(refusal.contains(cause), "{name}: {refusal}");
+        }
+    }
+
+    /// A refused draw never entered its conversation's history: the request
+    /// that draws the turn again -- the prompt the refused draw answered, and
+    /// the harness's notice naming why it was refused -- owes nothing of it,
+    /// and is admitted. The stream then ends without that request's response,
+    /// and only its ending is refused.
+    #[test]
+    fn a_redraw_after_a_refused_draw_owes_nothing_of_it() {
+        let mut rows = refused_draw();
+        rows.pop();
+        let first = rows[position(&rows, "model_request")]["request"].clone();
+        let json = first["body"]["json"].as_str().unwrap();
+        let open = json.find("\"messages\":[").unwrap() + "\"messages\":[".len();
+        let close = json.find("]}],").unwrap() + 2;
+        let (prefix, suffix) = (&json[..open], &json[close..]);
+        let notice = serde_json::json!({"role":"user","content":
+            "Your previous answer to this request was refused because it reached its output limit."}).to_string();
+        let redrawn = format!("{prefix}{},{notice}{suffix}", &json[open..close]);
+        let mut redraw = rows[position(&rows, "model_request")].clone();
+        redraw["uuid"] = serde_json::json!("redraw-request");
+        let request = &mut redraw["request"];
+        request["sequence"] = serde_json::json!(2);
+        request["request_id"] = serde_json::json!("redraw");
+        request["owner"] = serde_json::json!({"kind":"chat","attempt_id":"redraw-attempt"});
+        request["body_bytes"] = serde_json::json!(redrawn.len());
+        request["body_sha256"] = serde_json::json!(crate::generation::sha256(redrawn.as_bytes()));
+        request["body"] = serde_json::json!({"kind":"delta","base_request_id":first["request_id"],
+            "retain_messages":1,"prefix":prefix,"suffix":suffix,"added_messages":[notice],
+            "authors":{"prefix":[{"author":"harness","bytes":prefix.len()}],
+                "added_messages":[[{"author":"harness","bytes":notice.len()}]],
+                "suffix":[{"author":"harness","bytes":suffix.len()}]}});
+        rows.push(redraw);
+        match first_refusal(&rows) {
+            Err((at, _)) if at == rows.len() => {}
+            other => panic!("the redraw is refused or the stream certified: {other:?}"),
         }
     }
 
@@ -4107,7 +4175,7 @@ mod tests {
             last_shown + 1..last_shown + 1,
             [
                 partial("call", serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"provider__qwen_dup_2","name":"audit_probe","input":{}}})),
-                partial("call-delta", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{ \"value\" : 1e0 }"}})),
+                partial("call-delta", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"value\": 1.0}"}})),
                 partial("call-stop", serde_json::json!({"type":"content_block_stop","index":0})),
                 partial("stop", serde_json::json!({"type":"message_stop"})),
             ],

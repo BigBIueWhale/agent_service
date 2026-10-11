@@ -1012,8 +1012,9 @@ with, and `harness` the client's own text: frames, reminders, notices, the
 compaction directive, and the JSON the request is written in. The client
 states the author once, where it composes the text, and a copy keeps it:
 the model's text copied verbatim is the model's and names the output it
-copies (a generation's reasoning, text, call name, or a string inside a
-call's arguments, or a compaction draw's call), and the operator's names the
+copies (a generation's reasoning, text, call name, the text its call's
+arguments were served as, or a string inside them that a tool echoes, or a
+compaction draw's call), and the operator's names the
 byte of `control/prompt.txt` it starts at; workspace `QWEN.md` and
 `AGENTS.md` are files the client read, so they are the world's. Bytes the
 client rewrites -- normalized, escaped, cut, re-serialized -- are no longer a
@@ -1034,15 +1035,22 @@ its last committed compaction, and that compaction's snapshot before them.
 Its assistant messages are exactly those turns, one each, in the order they
 were accepted: each the generation's text as its `content`, its reasoning as
 its `reasoning_content` and its calls as its `tool_calls` -- each call's
-normalized identity, its name, and its arguments compared as the values the
-SDK parses, so a key, a number or a literal the model wrote is held too --
-and nothing else. Every string of a turn -- its reasoning, its text, each
-call's name and each string inside each call's arguments -- is stated the
-model's where the turn carries it, a copy in full; inside the arguments' JSON
-text the characters JSON writes as escapes are the serialization's, and only
-they may be the harness's. Each non-empty section of the snapshot is the
-model's, a copy in full of the draw's call, in one message before the turns,
-between its own element's tags. A refused or abandoned generation never
+normalized identity, its name, and as its `arguments` the text the call's
+arguments were served as, byte for byte, the model's spelling of every key,
+number, escape and space -- and nothing else. A call is made, recorded, shown
+and sent again as that text: the client parses the value a tool reads from it
+and writes that value nowhere, since a value read and written again is no
+longer what the model wrote (`1.0` becomes `1`, an integer past 2^53 loses
+digits, a key that reads as an integer moves to the front). Every string of a
+turn -- its reasoning, its text, each call's name and each call's arguments
+text, whole -- is stated the model's where the turn carries it, a copy in
+full, every byte once. The snapshot is the block the history holds, exactly:
+one user message before the turns holds its opening as one text item -- the
+model's sections before the retained inputs, each between its own element's
+tags, every byte of the frame the harness's -- then the retained inputs, then
+an item that opens with its closing, each section a copy in full of the
+draw's call at the byte its half puts it; what follows the closing in that
+item is the harness's resume trailer, which authorship holds. A refused or abandoned generation never
 entered history, and nothing owes it. A compaction that fails replaces
 nothing, so its conversation owes what it owed and the next attempt's draw
 carries it; one that commits leaves the snapshot and the turn carried behind
@@ -1051,10 +1059,12 @@ the scope's last chat request carried -- that request's prompt is the one it
 summarises, and the turn after it is carried, not summarised. A side query
 owns a scope no conversation uses and owes nothing; any request in a
 conversation's scope, whoever issued it, continues that conversation. So a
-turn dropped, trimmed, re-sliced, normalized or rewritten -- its bytes stated
-the model's or the harness's -- carried twice or beside an assistant message
-the model never wrote is refused, naming the turn and what differs, and so is
-a snapshot section re-cut, normalized, misplaced or missing. A quote of the
+turn dropped, trimmed, re-sliced, normalized, re-serialized or rewritten --
+its bytes stated the model's or the harness's -- carried twice or beside an
+assistant message the model never wrote is refused, naming the turn and what
+differs, and so is a snapshot whose block differs anywhere -- a section
+re-cut, normalized, misplaced or missing, harness text in a section the model
+left empty, or no block at all -- naming the half that differs and the byte. A quote of the
 model's words anywhere else -- a tool echoing an argument, the todo reminder
 listing what `todo_write` set -- is the composer's, and is free. The canonical
 recording stores the same request evidence and the same authored parts, and

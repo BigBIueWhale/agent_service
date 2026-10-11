@@ -858,13 +858,19 @@ def _validate_stream_commit_after(state: State) -> None:
             "  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';",
             "choice.finish_reason !== callTerminal &&",
             "choice.finish_reason !== 'length'",
-            # A call's arguments are read by one rule on both transports: the
-            # served text parsed once, which must be an object; an empty or
-            # non-string one states none and is refused.
-            "import { parseToolCallArguments } from './streamingToolCallParser.js';",
+            # A call is made by one rule on both transports: from the text
+            # its arguments were served as, which is kept and must read as one
+            # object; an empty or non-string one states none and is refused.
+            "import {\n  functionCallText,\n  servedFunctionCall,\n} from '../served-function-call.js';",
             "          typeof served === 'string'\n"
-            "            ? parseToolCallArguments(served)\n"
+            "            ? servedFunctionCall(\n"
+            "                { id: toolCall.id, name: toolCall.function.name },\n"
+            "                served,\n"
+            "              )\n"
             "            : undefined;",
+            # A request carries each call as the text it was served as, and
+            # never writes one from its value.
+            "          arguments: functionCallText(part.functionCall),",
             "Model response completed the tool branch without a tool call.",
             "toolCallParser.hasInvalidToolCallIndex()",
             "toolCallParser.hasConflictingToolCallIdentity()",
@@ -881,12 +887,12 @@ def _validate_stream_commit_after(state: State) -> None:
             "      )\n"
             "        ? parsedToolCalls\n"
             "        : [];",
-            # A completed call carries the provider's id; none is derived.
-            "          functionCall: {\n"
-            "            id: toolCall.id,\n"
-            "            name: toolCall.name,\n"
-            "            args: toolCall.args,\n"
-            "          },",
+            # A completed call carries the provider's id and the text it was
+            # served as; none is derived.
+            "        const call = servedFunctionCall(\n"
+            "          { id: toolCall.id, name: toolCall.name },\n"
+            "          toolCall.arguments,\n"
+            "        );",
         ),
         label=label,
     )
@@ -942,8 +948,14 @@ def _validate_stream_commit_after(state: State) -> None:
             "getBufferedToolCalls(): IncompleteToolCall[] {",
             "name: this.toolCallMeta.get(index)?.name ?? null,",
             "arguments: this.buffers.get(index) ?? '',",
-            "export function parseToolCallArguments(",
-            "const args = parseToolCallArguments(buffer);",
+            "import { parseToolCallArguments } from '../served-function-call.js';",
+            "if (!parseToolCallArguments(buffer)) {",
+            "      completed.push({\n"
+            "        id: meta.id,\n"
+            "        name: meta.name,\n"
+            "        arguments: buffer,\n"
+            "        index,\n"
+            "      });",
         ),
         label=label,
     )
@@ -982,7 +994,7 @@ def _validate_stream_commit_after(state: State) -> None:
             )
     _require_all(state, converter, (
         "          name: toolCall.function?.name || null,",
-        "        if (!toolCall.id || !toolCall.function.name) {",
+        "        if (!call.id || !call.name) {",
     ), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/converter.test.ts", (
         "carries the names a batch response served its calls with exactly, stopped or made",
@@ -13172,7 +13184,40 @@ def _validate_text_authorship_after(state: State) -> None:
     _require_all(
         state,
         "packages/core/src/core/generation-envelope.ts",
-        ("export function authoredGenerationHistory(",),
+        (
+            "export function authoredGenerationHistory(",
+            # A call is the model's whole: the text its arguments were served
+            # as, which a record keeps and the history cites.
+            "              source(`/calls/${index}/arguments`),",
+            "        const call = readRecordedFunctionCall(part['functionCall']);",
+        ),
+        label=label,
+    )
+    forbid_text(
+        state, "packages/core/src/core/generation-envelope.ts", "authoredJson(", label=label
+    )
+    # Every record writes a call as that text and nothing parsed from it, and
+    # no request writes one from its value.
+    _require_all(
+        state,
+        "packages/core/src/core/served-function-call.ts",
+        (
+            "export function servedFunctionCall(",
+            "export function recordJson(",
+            "    if (key === 'functionCall' && object(item))",
+        ),
+        label=label,
+    )
+    for path, writer in (
+        ("packages/core/src/core/model-generation.ts", "  const json = recordJson(envelope, (key, value: unknown) => {"),
+        ("packages/core/src/utils/runtime-contract-admission.ts", "      bytes = recordJson(record, (key, value: unknown) => {"),
+        ("packages/core/src/services/session-writer-lease.ts", "        const serialized = recordJson(value);"),
+    ):
+        require_text(state, path, writer, label=label)
+    forbid_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.ts",
+        "JSON.stringify(part.functionCall.args",
         label=label,
     )
     _require_all(

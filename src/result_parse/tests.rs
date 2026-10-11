@@ -443,7 +443,7 @@ impl Trace {
                                 raw.replace(provider_id, &format!(r#""id":{}"#, json!(call_id)));
                             if call.is_none() {
                                 let delivered = format!(
-                                    r#","tool_calls":[{{"index":0,"id":{},"type":"function","function":{{"name":"audit_probe","arguments":"{{\"value\":1}}"}}}}]"#,
+                                    r#","tool_calls":[{{"index":0,"id":{},"type":"function","function":{{"name":"audit_probe","arguments":"{{\"value\": 1.0}}"}}}}]"#,
                                     json!(call_id)
                                 );
                                 assert_eq!(changed.matches(&delivered).count(), 1);
@@ -579,7 +579,7 @@ impl Trace {
         let mut turn = json!({"role":"assistant","content":text,"reasoning_content":reasoning});
         if let Some(call_id) = call {
             turn["tool_calls"] = json!([{"id":call_id,"type":"function",
-                "function":{"name":name,"arguments":"{\"value\":1}"}}]);
+                "function":{"name":name,"arguments":WIRE_ARGUMENTS}}]);
         }
         let turn = turn.to_string();
         let mut tables = Vec::new();
@@ -587,6 +587,7 @@ impl Trace {
         let mut strings = vec![(json!(text).to_string(), "/text"), (json!(reasoning).to_string(), "/reasoning")];
         if call.is_some() {
             strings.push((json!(name).to_string(), "/calls/0/name"));
+            strings.push((json!(WIRE_ARGUMENTS).to_string(), "/calls/0/arguments"));
         }
         // Each string's stored bytes between its quotes, in the order the
         // turn's members are written.
@@ -881,7 +882,7 @@ impl Trace {
             // A draw that declared a snapshot cites the count of its block,
             // which the client makes after the draw and before its candidate.
             if let Some(count) = draw["snapshotTokens"].as_u64() {
-                let block = snapshot_block(&draw["functionCalls"][0]["args"]);
+                let block = snapshot_block(&served_value(&draw["functionCalls"][0]));
                 let counted = self.text_tokenizer(&kv, &block, count);
                 match index {
                     Some(index) => {
@@ -914,18 +915,27 @@ impl Trace {
             .find(|row| row["subtype"] == "compaction")
             .expect("a committed compaction")["data"]["output"];
         let draw = output["operationId"].as_str().unwrap().to_string();
-        let args = output["functionCalls"][0]["args"].clone();
-        let block = snapshot_block(&args);
-        let message = json!({"role":"user","content":[{"type":"text","text":block}]}).to_string();
+        let args = served_value(&output["functionCalls"][0]);
+        let (opening, closing) = snapshot_halves(&args);
+        // The block in its two halves around the retained input, and the
+        // resume trailer after it, each a text item, as the client sends them.
+        let closed = format!("{closing}\n\n{RESUME_TRAILER}");
+        let message = json!({"role":"user","content":[
+            {"type":"text","text":opening},
+            {"type":"text","text":"Original input."},
+            {"type":"text","text":closed},
+        ]})
+        .to_string();
         let stored = |text: &str| json!(text).to_string().len() - 2;
-        let start = message.find(&json!(block).to_string()).unwrap() + 1;
         let mut tables = Vec::new();
         let mut at = 0;
         for (section, text) in args.as_object().unwrap() {
             let text = text.as_str().unwrap();
             let tag = format!("    <{section}>\n");
-            let decoded = block.find(&tag).unwrap() + tag.len();
-            let from = start + stored(&block[..decoded]);
+            let half = if opening.contains(&tag) { &opening } else { &closed };
+            let start = message.find(&json!(half).to_string()).unwrap() + 1;
+            let decoded = half.find(&tag).unwrap() + tag.len();
+            let from = start + stored(&half[..decoded]);
             tables.push((from, stored(text), section.clone()));
         }
         tables.sort_unstable();
@@ -1119,9 +1129,30 @@ fn owned_event_file(bytes: &[u8]) -> std::path::PathBuf {
 /// The native certification of one opened snapshot: descriptor framing and
 /// the pure runtime contract, without the physical response replay that the
 /// service image's pinned verifier adds afterwards.
+/// The text the wire fixture's call served its arguments as.
+const WIRE_ARGUMENTS: &str = r#"{"value": 1.0}"#;
+
+/// The resume trailer the client puts after the snapshot block
+/// (`postCompactAttachments.ts`'s `RESUME_TRAILER`).
+const RESUME_TRAILER: &str = "Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.";
+
+/// The value a recorded call's served text holds: a record keeps the call as
+/// that text and nothing parsed from it.
+fn served_value(call: &Value) -> Value {
+    assert!(call.get("args").is_none(), "a recorded call holds no value of its own");
+    serde_json::from_str(call["arguments"].as_str().unwrap()).unwrap()
+}
+
 /// The block a draw's snapshot call renders to as the model wrote it: the
 /// client's `stateSnapshotText`, the text its count is made of.
 fn snapshot_block(args: &Value) -> String {
+    let (opening, closing) = snapshot_halves(args);
+    format!("{opening}{closing}")
+}
+
+/// That block in the two halves the history carries around the retained
+/// inputs: the client's `renderAuthoredStateSnapshot`.
+fn snapshot_halves(args: &Value) -> (String, String) {
     const ELEMENTS: [&str; 9] = [
         "primary_request_and_intent",
         "key_technical_concepts",
@@ -1136,10 +1167,9 @@ fn snapshot_block(args: &Value) -> String {
     let element =
         |section: &str| format!("    <{section}>\n{}\n    </{section}>", args[section].as_str().unwrap());
     let join = |sections: &[&str]| sections.iter().map(|section| element(section)).collect::<Vec<_>>().join("\n\n");
-    format!(
-        "<state_snapshot>\n{}\n\n    <all_user_messages>\n\n    </all_user_messages>\n\n{}\n</state_snapshot>",
-        join(&ELEMENTS[..5]),
-        join(&ELEMENTS[6..])
+    (
+        format!("<state_snapshot>\n{}\n\n    <all_user_messages>\n", join(&ELEMENTS[..5])),
+        format!("\n    </all_user_messages>\n\n{}\n</state_snapshot>", join(&ELEMENTS[6..])),
     )
 }
 

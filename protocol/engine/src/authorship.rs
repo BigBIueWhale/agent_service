@@ -220,6 +220,24 @@ fn pointed<'a>(arguments: &'a serde_json::Value, pointer: &str) -> Option<&'a st
     arguments.pointer(pointer)?.as_str()
 }
 
+/// The text a decoded call's arguments were served as: a record keeps a call
+/// as that text and nothing parsed from it, so a call holding a value of its
+/// own, or no text, is none the record could hold.
+pub(crate) fn served_text(call: &serde_json::Value) -> Option<&str> {
+    if call.get("args").is_some() {
+        return None;
+    }
+    call.get("arguments")?.as_str()
+}
+
+/// The value a decoded call's served text holds, when it holds one object.
+pub(crate) fn served_value(call: &serde_json::Value) -> Option<serde_json::Map<String, serde_json::Value>> {
+    match serde_json::from_str(served_text(call)?).ok()? {
+        serde_json::Value::Object(members) => Some(members),
+        _ => None,
+    }
+}
+
 /// `/calls/<index>` and what follows it in a cited field.
 fn call_field(field: &str) -> Option<(usize, &str)> {
     let rest = field.strip_prefix("/calls/")?;
@@ -244,12 +262,11 @@ impl ModelOutputs<'_> {
                         let call = generation.calls.get(index).ok_or_else(missing)?;
                         match rest {
                             "/name" => call.name.as_deref().map(Cow::Borrowed).ok_or_else(missing),
+                            "/arguments" => Ok(Cow::Borrowed(call.arguments.as_str())),
                             _ => {
                                 let pointer = rest.strip_prefix("/args").ok_or_else(missing)?;
-                                let arguments: serde_json::Value = serde_json::from_str(
-                                    call.arguments.as_deref().ok_or_else(missing)?,
-                                )
-                                .map_err(|_| missing())?;
+                                let arguments: serde_json::Value =
+                                    serde_json::from_str(&call.arguments).map_err(|_| missing())?;
                                 pointed(&arguments, pointer)
                                     .map(|text| Cow::Owned(text.to_string()))
                                     .ok_or_else(missing)
@@ -273,10 +290,15 @@ impl ModelOutputs<'_> {
                                 .map(Cow::Borrowed)
                                 .ok_or_else(missing);
                         }
+                        let text = served_text(call).ok_or_else(missing)?;
+                        if rest == "/arguments" {
+                            return Ok(Cow::Borrowed(text));
+                        }
                         let pointer = rest.strip_prefix("/args").ok_or_else(missing)?;
-                        call.get("args")
-                            .and_then(|arguments| pointed(arguments, pointer))
-                            .map(Cow::Borrowed)
+                        let arguments: serde_json::Value =
+                            serde_json::from_str(text).map_err(|_| missing())?;
+                        pointed(&arguments, pointer)
+                            .map(|text| Cow::Owned(text.to_string()))
                             .ok_or_else(missing)
                     }
                 }
@@ -474,50 +496,17 @@ pub(crate) struct Citation {
     pub to: usize,
 }
 
-/// Every string of `value` by its JSON pointer below `pointer`, in document
-/// order: what a call's arguments hold that a run of model text can copy.
-/// Keys, numbers, literals and the structure are no string of the model's a
-/// run could cite, so a copy of them is held by its value, not here.
-pub(crate) fn string_leaves(value: &serde_json::Value, pointer: String, leaves: &mut Vec<(String, String)>) {
-    match value {
-        serde_json::Value::String(text) => leaves.push((pointer, text.clone())),
-        serde_json::Value::Array(items) => {
-            for (index, item) in items.iter().enumerate() {
-                string_leaves(item, format!("{pointer}/{index}"), leaves);
-            }
-        }
-        serde_json::Value::Object(members) => {
-            for (key, member) in members {
-                let step = key.replace('~', "~0").replace('/', "~1");
-                string_leaves(member, format!("{pointer}/{step}"), leaves);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Whether JSON writes `character` as an escape inside a string: the
-/// characters `JSON.stringify` does not write as themselves.
-fn escaped(character: char) -> bool {
-    character < '\u{20}' || character == '"' || character == '\\'
-}
-
 /// Whether `citations` -- the runs one place of a request carries -- copy
 /// `text`, the field `field` of output `kind` `id`, in full: every byte of it
-/// once, in order, and nothing twice. A text carried inside JSON text -- a
-/// call's arguments, which a request carries re-serialized -- may leave out
-/// exactly the characters JSON writes as escapes (`escapes`): those are the
-/// harness's serialization of the model's characters, and the value the
-/// arguments decode to holds them. Bytes are compared as written: a copy
-/// that normalized, trimmed or re-cut a character leaves a gap, and is no
-/// copy in full.
+/// once, in order, and nothing twice. Bytes are compared as written: a copy
+/// that normalized, trimmed, escaped or re-cut a character leaves a gap, and
+/// is no copy in full.
 pub(crate) fn copies_in_full<'a>(
     citations: impl IntoIterator<Item = &'a Citation>,
     kind: &str,
     id: &str,
     field: &str,
     text: &str,
-    escapes: bool,
 ) -> bool {
     let mut spans: Vec<(usize, usize)> = citations
         .into_iter()
@@ -525,18 +514,14 @@ pub(crate) fn copies_in_full<'a>(
         .map(|citation| (citation.from, citation.to))
         .collect();
     spans.sort_unstable();
-    let gap = |from: usize, to: usize| {
-        from == to
-            || escapes && text.get(from..to).is_some_and(|gap| gap.chars().all(escaped))
-    };
     let mut at = 0;
     for (from, to) in spans {
-        if from < at || !gap(at, from) {
+        if from != at {
             return false;
         }
         at = to;
     }
-    gap(at, text.len())
+    at == text.len()
 }
 
 #[cfg(test)]
@@ -557,7 +542,8 @@ mod tests {
             DrawOutput {
                 reasoning: String::new(),
                 text: String::new(),
-                calls: vec![json!({"name":"state_snapshot","args":{"current_work":"edit \"a\"\nthen b 😀"}})],
+                calls: vec![json!({"name":"state_snapshot",
+                    "arguments":json!({"current_work":"edit \"a\"\nthen b 😀"}).to_string()})],
             },
         )])
     }
@@ -690,11 +676,15 @@ mod tests {
             source("/calls/1/args/current_work", 0, "draw"),
             source("/calls/00/args/current_work", 0, "draw"),
             source("/calls/0/args/current_work", 0, "other"),
-            source("/calls/0/arguments", 0, "draw"),
+            source("/calls/0/argument", 0, "draw"),
         ] {
             let error = attribute(missing).unwrap_err();
             assert!(error.to_string().contains("does not have"), "{error}");
         }
+        // A call's arguments whole are the text they were served as, which
+        // the section's bytes are not.
+        let whole = attribute(source("/calls/0/arguments", 0, "draw")).unwrap_err();
+        assert!(whole.to_string().contains("not the bytes of"), "{whole}");
         let unknown = attribute(json!({"kind":"guess","id":"draw","field":"/text","offset":0})).unwrap_err();
         assert!(unknown.to_string().contains("unknown kind"), "{unknown}");
     }
@@ -733,14 +723,13 @@ mod tests {
         assert!(error.to_string().contains("one table to every message"), "{error}");
     }
 
-    /// A copy in full is every byte of the field once, in order. Inside a
-    /// call's arguments -- JSON text the request carries in a string -- the
-    /// characters JSON writes as escapes are the serialization's, and only
-    /// they may be left out; anywhere else, nothing may.
+    /// A copy in full is every byte of the field once, in order: a gap, an
+    /// overlap, a byte left out at the end or cited twice, and runs of
+    /// another output or field are no copy of it.
     #[test]
-    fn a_copy_in_full_leaves_out_only_the_escapes_of_json_text() {
+    fn a_copy_in_full_is_every_byte_once_in_order() {
         let text = "a\nb\"c\u{301}";
-        let field = "/calls/0/args/content";
+        let field = "/calls/0/arguments";
         let cite = |spans: &[(usize, usize)]| -> Vec<Citation> {
             spans
                 .iter()
@@ -756,22 +745,20 @@ mod tests {
                 })
                 .collect()
         };
-        let copies = |spans: &[(usize, usize)], escapes: bool| {
-            copies_in_full(&cite(spans), "generation", "g", field, text, escapes)
-        };
+        let copies = |spans: &[(usize, usize)]| copies_in_full(&cite(spans), "generation", "g", field, text);
         let end = text.len();
-        assert!(copies(&[(0, end)], false));
-        assert!(copies(&[(0, 1), (2, 3), (4, end)], true));
-        // The same gaps where nothing is JSON text, or gaps of other text.
-        assert!(!copies(&[(0, 1), (2, 3), (4, end)], false));
-        assert!(!copies(&[(0, 1), (4, end)], true));
+        assert!(copies(&[(0, end)]));
+        assert!(copies(&[(0, 1), (1, 3), (3, end)]));
+        // The characters JSON writes as escapes are the model's too.
+        assert!(!copies(&[(0, 1), (2, 3), (4, end)]));
         // A character left out at the end -- the combining mark a
-        // normalization folds -- and a byte cited twice.
-        assert!(!copies(&[(0, 5)], true));
-        assert!(!copies(&[(0, 1), (0, 1), (2, 3), (4, end)], true));
+        // normalization folds -- an overlap, and a byte cited twice.
+        assert!(!copies(&[(0, 5)]));
+        assert!(!copies(&[(0, 3), (2, end)]));
+        assert!(!copies(&[(0, 1), (0, 1), (1, end)]));
         // Runs of another output or field copy nothing of this one.
-        assert!(!copies_in_full(&cite(&[(0, end)]), "generation", "h", field, text, true));
-        assert!(!copies_in_full(&cite(&[(0, end)]), "generation", "g", "/text", text, false));
-        assert!(copies_in_full(&[], "generation", "g", field, "", false));
+        assert!(!copies_in_full(&cite(&[(0, end)]), "generation", "h", field, text));
+        assert!(!copies_in_full(&cite(&[(0, end)]), "generation", "g", "/text", text));
+        assert!(copies_in_full(&[], "generation", "g", field, ""));
     }
 }

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `0fc53c54db5d4108d0146986bb1a22497d0aef8eafd791673fca49afcd4ac871`
+- Review-diff SHA-256: `f29e9ec748ae510da4e45cb5fe16f1ad059749b312caf2c29191c1fd8e531ac1`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4f3c6b43166d73c00e6aef0291afdc82d4c5d591029ffe980ab25a662fda8380`
+- Transformer-manifest SHA-256: `55dda5c77fae5cb7774572080738f74efbaf66cc429a5023380ea9f0d6046255`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -581,9 +581,15 @@ the model's and names the output it copies, and a copy of the task names the
 byte of the task it starts at. Bytes the client rewrites are no longer a copy
 and are the harness's: `normalizeAuthored`, `replaceAuthored`, the cuts and
 trims carry every run through a transformation and give the harness exactly
-the span it changed, and `authoredJson` writes a call's arguments as the
-model's strings in the harness's JSON. A request's history turns cite their
-generation through `authoredGenerationHistory`; a tool echoes an argument
+the span it changed. A call is the model's whole: it is held as the text its
+arguments were served as (`served-function-call.ts`), every record writes it
+as that text and nothing parsed from it (`recordJson`), every request carries
+that text back byte for byte, and a display shows it; the value a tool reads
+is parsed from the text and written nowhere. `authoredJson` writes only a
+tool's own JSON display of an argument's value, the model's strings in the
+harness's serialization. A request's history turns cite their generation --
+a call's arguments whole, as `/calls/<i>/arguments` -- through
+`authoredGenerationHistory`; a tool echoes an argument
 through `modelArgument`, which cites the call that supplied it when the echo
 is verbatim.
 
@@ -603,8 +609,10 @@ record binds what it counted by its scope, window and model. What is checked:
 the engine holds every run stated as the model's or the operator's to the
 bytes it cites, and every request to carry what its conversation owes the
 model -- each turn it accepted since its last committed compaction, exactly as
-the model wrote it and stated the model's, and that compaction's snapshot,
-each section the model's between its own tags (`require_owed`); the client
+the model wrote it and stated the model's, its calls' arguments the text they
+were served as byte for byte, and that compaction's snapshot as the block the
+history holds, exactly, each section the model's at its place
+(`require_owed`); the client
 holds a text's runs to it by length. Anywhere else a run stated as the
 harness's or the world's is not checked against anything, so an under-claim
 there -- a quote of the model, or the operator's bytes, stated as another's --

@@ -59,7 +59,7 @@ fn committed_with(history: Value, sections: Value) -> Value {
     .to_string();
     let draw = json!({"maxOutputTokens":COMPACTION_BUDGET,"physicalRequests":1,
         "operationId":"named-when-recorded",
-        "functionCalls":[{"id":"snapshot-call","name":"state_snapshot","args":sections}],
+        "functionCalls":[{"id":"snapshot-call","name":"state_snapshot","arguments":sections.to_string()}],
         "text":"","reasoning":"","sdkValuesJson":[provider, usage_chunk(&usage)],
         "newTokenCount":12,"snapshotTokens":131,"snapshotCountOperationId":"named-when-recorded","incompleteToolCalls":[],
         "finishReason":"STOP","usage":usage});
@@ -283,7 +283,7 @@ fn compaction_history_is_required_exactly_when_committed() {
     data(&mut trace)["postCompactionHistory"] = json!([
         {"role":"user","parts":[{"text":"<all_user_messages>\n"},
             {"text":"Original user text, verbatim.\n"},{"text":"</all_user_messages>"}]},
-        {"role":"model","parts":[{"functionCall":{"id":"carried","name":"read_file","args":{"path":"a"}}}]}
+        {"role":"model","parts":[{"functionCall":{"id":"carried","name":"read_file","arguments":"{\"path\":\"a\"}"}}]}
     ]);
     trace.certify();
     data(&mut trace)["succeeded"] = json!(false);

@@ -79,6 +79,13 @@ class SmokeFailure(RuntimeError):
     pass
 
 
+def served_smoke_arguments(fixture: Path) -> str:
+    """The text the stub serves the model's read_file call's arguments as:
+    the served engine's own spacing, which a value read and written again by
+    the client's JSON would not keep."""
+    return json.dumps({"file_path": str(fixture), "offset": 0})
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise SmokeFailure(message)
@@ -251,7 +258,7 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
 
 
 def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], certifier: Path,
-            deliverables: list[str], prompt: bytes) -> dict:
+            deliverables: list[str], prompt: bytes, served: str) -> dict:
     require(bool(stdout.strip()), "CLI emitted no events")
     require(stdout.endswith(b"\n"), "CLI emitted an unterminated event")
     certificate = certify(stdout, certifier, runtime / "events.jsonl", prompt)
@@ -337,10 +344,17 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             "the next request did not give the model the file content; inspect result serialization")
     carried_calls = [call for message in generations[1]["messages"]
                      if message.get("role") == "assistant" for call in message.get("tool_calls", [])]
+    # The model's call travels as the text its arguments were served as, byte
+    # for byte: the next request carries it, the stream shows it, and the
+    # canonical record keeps it -- never a value read and written again.
     require(len(carried_calls) == 1 and carried_calls[0]["id"] == uses[0]["id"] and
             carried_calls[0]["function"]["name"] == uses[0]["name"] and
-            json.loads(carried_calls[0]["function"]["arguments"]) == uses[0]["input"],
+            carried_calls[0]["function"]["arguments"] == served,
             "the next request rewrote the model's call; inspect canonical model-part commitment")
+    shown = [line for line in stdout.splitlines() if b'"type":"tool_use"' in line and b'"type":"assistant"' in line]
+    require(len(shown) == 1 and b'"input":' + served.encode("utf-8") in shown[0] and
+            uses[0]["input"] == json.loads(served),
+            "the stream showed the model's call other than as the text it was served as")
     require(all(g["kv_scope"] == session for g in generations), "provider requests lost their session owner")
     transcripts = list(runtime.rglob(f"chats/{session}.jsonl"))
     require(len(transcripts) == 1, "canonical session transcript is missing or ambiguous")
@@ -466,7 +480,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             "tool result was not recorded")
     recorded_calls = [part["functionCall"] for record in fresh_assistants
                       for part in smoke_assistant_content(record)["parts"] if "functionCall" in part]
-    require(recorded_calls == [{"id": uses[0]["id"], "name": uses[0]["name"], "args": uses[0]["input"]}],
+    require(recorded_calls == [{"id": uses[0]["id"], "name": uses[0]["name"], "arguments": served}],
             "canonical history rewrote the model's call; inspect assistant recording before testing resume")
     # The final turn's completion evidence follows its commit; the last turn of
     # the conversation is the final answer.
@@ -594,7 +608,7 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     if generation_count == 1:
                         require(nonce not in json.dumps(body), "fixture content leaked into the initial prompt")
                         delta = {"tool_calls": [{"index": 0, "id": "smoke_read", "type": "function",
-                            "function": {"name": "read_file", "arguments": json.dumps({"file_path": str(fixture), "offset": 0})}}]}
+                            "function": {"name": "read_file", "arguments": served_smoke_arguments(fixture)}}]}
                         finish = "tool_calls"
                     elif generation_count == 2:
                         carried = [m for m in body["messages"] if m.get("role") == "assistant"]
@@ -690,7 +704,8 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     f"CLI exited {process.returncode}, not {expected_exit}; stdout={stdout!r}; stderr={stderr!r}")
             require(not failures, f"provider protocol failed: {failures}")
             require(sealed_digests(sealed_home) == sealed_before, "the run changed a file in the sealed home")
-            result = qualify(stdout, runtime, nonce, requests, certifier, deliverables, prompt.encode())
+            result = qualify(stdout, runtime, nonce, requests, certifier, deliverables, prompt.encode(),
+                             served_smoke_arguments(fixture))
             require_production_requests(requests, settings, instructions,
                                         os.path.relpath(instructions_path, workspace), output_language,
                                         os.path.relpath(output_language_path, workspace),

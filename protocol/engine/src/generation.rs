@@ -69,8 +69,10 @@ impl Origin {
 pub(crate) struct Call {
     pub id: String,
     pub name: Option<String>,
-    pub arguments: Option<String>,
-    object_arguments: bool,
+    /// The text the call's arguments were served as, which the record keeps
+    /// whole and nothing beside it: one JSON object, the model's spelling of
+    /// every key, number, escape and space.
+    pub arguments: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -207,6 +209,27 @@ fn finite_numbers(root: Value<'_>) -> ContractResult<()> {
         }
     }
     Ok(())
+}
+
+/// The text a recorded call's arguments were served as. A record keeps a
+/// call as that text and nothing parsed from it -- a value read and written
+/// again is no longer what the model wrote -- and the text is one JSON object
+/// whose every value is exact: no key twice, no number past the finite range.
+fn served_arguments(call: Value<'_>, json: Limits) -> ContractResult<String> {
+    let refused = || refusal("an observed call is not the one JSON object its arguments were served as");
+    if call.get("args").is_some() {
+        return Err(refused());
+    }
+    let text = call
+        .get("arguments")
+        .and_then(Value::as_str)
+        .ok_or_else(refused)?;
+    let arguments = Document::decode(text.as_bytes(), json).map_err(|_| refused())?;
+    if arguments.root().as_object().is_none() {
+        return Err(refused());
+    }
+    finite_numbers(arguments.root()).map_err(|_| refused())?;
+    Ok(text.to_string())
 }
 
 fn next_normalized_id(raw: Option<&str>, used: &BTreeSet<String>) -> ContractResult<String> {
@@ -386,12 +409,14 @@ impl Generation {
                         .get("functionCall")
                         .filter(|value| truthy(Some(*value)));
                     let mut normalized_id = None;
+                    let mut served = None;
                     if let Some(call) = call {
                         if call.as_object().is_none()
                             || call.get("id").is_some_and(|id| !id.is_string())
                         {
                             return Err(refusal("observed function call identity is invalid"));
                         }
+                        served = Some(served_arguments(call, json)?);
                         let mapping = mappings
                             .get(mapped)
                             .ok_or_else(|| refusal("call mapping omits an observed call"))?;
@@ -468,14 +493,11 @@ impl Generation {
                     }
                     previous_plain_nonempty = plain && truthy(part.get("text"));
                     generation.accepted_images_valid &= valid_image_references(part);
-                    if let (Some(call), Some(id)) = (call, normalized_id) {
+                    if let (Some(call), Some(id), Some(arguments)) = (call, normalized_id, served) {
                         generation.calls.push(Call {
                             id: id.into(),
                             name: call.get("name").and_then(Value::as_str).map(str::to_string),
-                            arguments: call.get("args").map(|args| args.raw().to_string()),
-                            object_arguments: call
-                                .get("args")
-                                .is_some_and(|args| args.as_object().is_some()),
+                            arguments,
                         });
                         generation.shown.push(Shown::Call(generation.calls.len() - 1));
                     } else {
@@ -551,11 +573,12 @@ impl Generation {
                 )),
                 Shown::Call(index) => {
                     let call = &self.calls[*index];
-                    let (Some(name), Some(arguments), false) =
-                        (&call.name, &call.arguments, refused)
-                    else {
+                    let (Some(name), false) = (&call.name, refused) else {
                         return Err(refusal("a displayed turn carries a call it cannot have made"));
                     };
+                    // The call's input is the text its arguments were served
+                    // as, spliced whole: one JSON object, the model's bytes.
+                    let arguments = &call.arguments;
                     blocks.push((
                         "tool_use",
                         format!(
@@ -640,9 +663,9 @@ impl Generation {
             return Err(refusal("accepted history has an invalid image reference"));
         }
         if self.calls.len() > 1
-            || self.calls.iter().any(|call| {
-                !call.name.as_ref().is_some_and(|name| !name.is_empty()) || !call.object_arguments
-            })
+            || self.calls
+                .iter()
+                .any(|call| !call.name.as_ref().is_some_and(|name| !name.is_empty()))
         {
             return Err(refusal("accepted generation has invalid executable calls"));
         }

@@ -80,51 +80,72 @@ const SNAPSHOT_ELEMENTS: [&str; 9] = [
 ];
 
 /// The sections of the snapshot a draw declared, in the block's order, or
-/// None when it declared none: one `state_snapshot` call whose arguments are
-/// exactly the sections, each a string. The declaration's shape alone
-/// decides it, as it decides acceptance.
-pub(crate) fn snapshot_sections(calls: &[serde_json::Value]) -> Option<Vec<(&'static str, &str)>> {
-    let call = calls.first()?.as_object()?;
+/// None when it declared none: one `state_snapshot` call whose arguments --
+/// the text they were served as -- are exactly the sections, each a string.
+/// The declaration's shape alone decides it, as it decides acceptance.
+pub(crate) fn snapshot_sections(calls: &[serde_json::Value]) -> Option<Vec<(&'static str, String)>> {
+    let call = calls.first()?;
     if calls.len() != 1 || call.get("name")?.as_str()? != "state_snapshot" {
         return None;
     }
-    let args = call.get("args")?.as_object()?;
+    let args = authorship::served_value(call)?;
     if args.len() != SNAPSHOT_ELEMENTS.len() - 1 {
         return None;
     }
     SNAPSHOT_ELEMENTS
         .iter()
         .filter(|section| **section != "all_user_messages")
-        .map(|section| Some((*section, args.get(*section)?.as_str()?)))
+        .map(|section| Some((*section, args.get(*section)?.as_str()?.to_string())))
         .collect()
 }
 
 /// The block the snapshot a draw declared renders to, as the model wrote it,
-/// or None when it declared none. This is the client's
-/// `declaredSnapshotText`: the frame the history gives the block around each
-/// section byte for byte, `all_user_messages` empty, and no normalization,
-/// so the text a draw's cited count was made of is compared with it byte for
-/// byte and no Unicode table this engine and the client could hold at
-/// different versions decides whether a record is believed.
+/// in the two halves a history carries around the retained inputs, with
+/// where each section stands in them. This is the client's
+/// `renderAuthoredStateSnapshot`: the frame the history gives the block
+/// around each section byte for byte, and no normalization, so no Unicode
+/// table this engine and the client could hold at different versions decides
+/// whether a record is believed.
+pub(crate) struct SnapshotBlock {
+    /// Ends with `all_user_messages`' opening tag and its line break.
+    pub opening: String,
+    /// Begins with the line break before `all_user_messages`' closing tag.
+    pub closing: String,
+    /// Each section: its name, whether the closing half holds it, the byte of
+    /// that half its text starts at, and its text.
+    pub sections: Vec<(&'static str, bool, usize, String)>,
+}
+
+impl SnapshotBlock {
+    pub(crate) fn of(calls: &[serde_json::Value]) -> Option<Self> {
+        let declared: BTreeMap<&str, String> = snapshot_sections(calls)?.into_iter().collect();
+        let mut sections = Vec::new();
+        let mut half = |closing: bool, mut text: String, elements: &[&'static str]| {
+            for (index, section) in elements.iter().enumerate() {
+                if index > 0 {
+                    text.push_str("\n\n");
+                }
+                text.push_str(&format!("    <{section}>\n"));
+                sections.push((*section, closing, text.len(), declared[section].clone()));
+                text.push_str(&declared[section]);
+                text.push_str(&format!("\n    </{section}>"));
+            }
+            text
+        };
+        let opening = half(false, "<state_snapshot>\n".to_string(), &SNAPSHOT_ELEMENTS[..5])
+            + "\n\n    <all_user_messages>\n";
+        let closing = half(true, "\n    </all_user_messages>\n\n".to_string(), &SNAPSHOT_ELEMENTS[6..])
+            + "\n</state_snapshot>";
+        Some(Self { opening, closing, sections })
+    }
+}
+
+/// The block the snapshot a draw declared renders to with `all_user_messages`
+/// empty, or None when it declared none: its two halves together, the text a
+/// draw's cited count was made of, compared with it byte for byte.
 pub(crate) fn snapshot_text(calls: &[serde_json::Value]) -> Option<String> {
-    let sections: BTreeMap<&str, &str> = snapshot_sections(calls)?.into_iter().collect();
-    let element = |section: &str| -> String {
-        let value = sections[section];
-        format!("    <{section}>\n{value}\n    </{section}>")
-    };
-    let before = SNAPSHOT_ELEMENTS[..5]
-        .iter()
-        .map(|section| element(section))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    let after = SNAPSHOT_ELEMENTS[6..]
-        .iter()
-        .map(|section| element(section))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    Some(format!(
-        "<state_snapshot>\n{before}\n\n    <all_user_messages>\n\n    </all_user_messages>\n\n{after}\n</state_snapshot>"
-    ))
+    let block = SnapshotBlock::of(calls)?;
+    Some(block.opening + &block.closing)
 }
 
 fn decoded_usage(value: Option<&serde_json::Value>) -> Option<serde_json::Value> {
@@ -770,9 +791,15 @@ struct Required<'a> {
 /// generation's text as its `content`, its reasoning as its
 /// `reasoning_content` -- either absent, null or empty when the model wrote
 /// none -- and its calls as its `tool_calls`, each the call's normalized
-/// identity, its name and its arguments as the generation recorded them,
-/// compared as the values the SDK parses, so a key, a number or an escape
-/// the model wrote is held as its strings are; and no other member.
+/// identity, its name, and as its `arguments` the text the call's arguments
+/// were served as, byte for byte, as the generation records it: the model's
+/// spelling of every key, number, escape and space, which a value read and
+/// written again does not keep; and no other member.
+///
+/// The text is held to the generation's record of it. That record is the
+/// client's capture of the response's tool-call deltas; this rule does not
+/// read the deltas from the response bytes again, so a capture that
+/// assembled other text than was served is not refused here.
 fn turn_difference(message: Value<'_>, generation: &Generation) -> Option<&'static str> {
     let only = |value: Value<'_>, keys: &[&str]| {
         value
@@ -814,57 +841,32 @@ fn turn_difference(message: Value<'_>, generation: &Generation) -> Option<&'stat
                     .and_then(|function| function.get("name"))
                     .and_then(Value::as_str)
                     == written.name.as_deref()
-                && match (
-                    function
-                        .and_then(|function| function.get("arguments"))
-                        .and_then(Value::as_str)
-                        .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok()),
-                    written
-                        .arguments
-                        .as_deref()
-                        .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok()),
-                ) {
-                    (Some(sent), Some(written)) => same_sdk_value(&sent, &written),
-                    _ => false,
-                }
+                && function
+                    .and_then(|function| function.get("arguments"))
+                    .and_then(Value::as_str)
+                    == Some(written.arguments.as_str())
         });
     (!same).then_some("tool_calls: they are not the calls the model made, each its identity, name and arguments")
 }
 
-/// Every string value inside `message`, by the byte of the message its
-/// content starts at, with its decoded text.
-fn string_values<'a>(message: Value<'a>) -> impl Iterator<Item = (usize, &'a str)> {
-    let base = message.byte_range().start;
-    let mut pending = vec![message];
-    let mut strings = Vec::new();
-    while let Some(value) = pending.pop() {
-        if let Some(text) = value.as_str() {
-            strings.push((value.byte_range().start + 1 - base, text));
-        }
-        pending.extend(value.elements().into_iter().flatten());
-        pending.extend(value.members().into_iter().flatten().map(|(_, member)| member));
-    }
-    strings.into_iter()
-}
-
 /// Every non-empty string of `generation` a request carries in its turn,
-/// with the member of `message` that carries it and whether it is carried
-/// inside JSON text: the reasoning, the text, each call's name, and each
-/// string inside each call's arguments. `message` is the generation's turn
-/// (`turn_difference` found none), so every member named here is present.
+/// with the member of `message` that carries it: the reasoning, the text,
+/// each call's name, and the text each call's arguments were served as,
+/// whole. `message` is the generation's turn (`turn_difference` found none),
+/// so every member named here is present.
 fn turn_strings<'a>(
     message: Value<'a>,
     generation: &Generation,
-) -> Vec<(String, std::ops::Range<usize>, String, bool)> {
+) -> Vec<(String, std::ops::Range<usize>, String)> {
     let member = |value: Option<Value<'a>>| value.expect("a turn's member").byte_range();
     let mut strings = Vec::new();
     let reasoning = generation.shown_reasoning();
     if !reasoning.is_empty() {
-        strings.push(("/reasoning".to_string(), member(message.get("reasoning_content")), reasoning.to_string(), false));
+        strings.push(("/reasoning".to_string(), member(message.get("reasoning_content")), reasoning.to_string()));
     }
     let text = generation.shown_text();
     if !text.is_empty() {
-        strings.push(("/text".to_string(), member(message.get("content")), text, false));
+        strings.push(("/text".to_string(), member(message.get("content")), text));
     }
     let calls: Vec<Value<'a>> = message
         .get("tool_calls")
@@ -874,22 +876,120 @@ fn turn_strings<'a>(
     for (index, (call, written)) in calls.iter().zip(&generation.calls).enumerate() {
         let function = call.get("function").expect("a turn's call function");
         if let Some(name) = written.name.as_deref().filter(|name| !name.is_empty()) {
-            strings.push((format!("/calls/{index}/name"), member(function.get("name")), name.to_string(), false));
+            strings.push((format!("/calls/{index}/name"), member(function.get("name")), name.to_string()));
         }
-        let arguments = member(function.get("arguments"));
-        let mut leaves = Vec::new();
-        if let Some(value) = written
-            .arguments
-            .as_deref()
-            .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
-        {
-            authorship::string_leaves(&value, format!("/calls/{index}/args"), &mut leaves);
-        }
-        for (field, leaf) in leaves.into_iter().filter(|(_, leaf)| !leaf.is_empty()) {
-            strings.push((field, arguments.clone(), leaf, true));
-        }
+        strings.push((
+            format!("/calls/{index}/arguments"),
+            member(function.get("arguments")),
+            written.arguments.clone(),
+        ));
     }
     strings
+}
+
+/// The text items of a user message, each with the byte of the message its
+/// string's content starts at.
+fn user_text_items<'a>(message: Value<'a>) -> Vec<(usize, &'a str)> {
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return Vec::new();
+    }
+    let base = message.byte_range().start;
+    message
+        .get("content")
+        .and_then(Value::elements)
+        .into_iter()
+        .flatten()
+        .filter(|item| item.get("type").and_then(Value::as_str) == Some("text"))
+        .filter_map(|item| {
+            let text = item.get("text")?;
+            Some((text.byte_range().start + 1 - base, text.as_str()?))
+        })
+        .collect()
+}
+
+/// The first byte at which `text` and `expected` differ.
+fn differs_at(text: &str, expected: &str) -> usize {
+    text.bytes().zip(expected.bytes()).take_while(|(a, b)| a == b).count()
+}
+
+/// Whether `messages` -- those before a request's first turn -- carry the
+/// snapshot `block` of `draw` as the history holds it: one user message
+/// holding the opening as one text item, the retained inputs after it, and
+/// then an item that opens with the closing, each section between its tags
+/// the model's copy in full, cited at the byte of its half it stands at. What
+/// follows the closing in its item is the harness's -- the resume trailer --
+/// and authorship holds it to that, not this rule. The detail of a refusal
+/// names which half differs and where.
+fn carries_block(
+    messages: &[Value<'_>],
+    citations: &[Vec<Citation>],
+    draw: &str,
+    block: &SnapshotBlock,
+) -> Result<(), String> {
+    let found = messages.iter().enumerate().find_map(|(index, message)| {
+        let items = user_text_items(*message);
+        let opening = items.iter().position(|(_, text)| *text == block.opening)?;
+        Some((index, items, opening))
+    });
+    let Some((index, items, opening)) = found else {
+        let nearest = messages
+            .iter()
+            .enumerate()
+            .flat_map(|(index, message)| {
+                user_text_items(*message)
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(item, (_, text))| (index, item, differs_at(text, &block.opening)))
+            })
+            .max_by_key(|(_, _, at)| *at);
+        return Err(match nearest {
+            Some((index, item, at)) => format!(
+                "no message holds its opening as one text item; the nearest, message {index} item {item}, differs from it at byte {at}"
+            ),
+            None => "no user message before them holds a text item".to_string(),
+        });
+    };
+    let Some(closing) = items[opening + 1..]
+        .iter()
+        .position(|(_, text)| text.starts_with(&block.closing))
+        .map(|at| opening + 1 + at)
+    else {
+        let nearest = items[opening + 1..]
+            .iter()
+            .enumerate()
+            .map(|(at, (_, text))| (opening + 1 + at, differs_at(text, &block.closing)))
+            .max_by_key(|(_, at)| *at);
+        return Err(match nearest {
+            Some((item, at)) => format!(
+                "message {index} holds its opening as item {opening}, but no later item opens with its closing; the nearest, item {item}, differs from it at byte {at}"
+            ),
+            None => format!("message {index} holds its opening as item {opening}, and no item after it"),
+        });
+    };
+    for (section, closes, offset, text) in &block.sections {
+        if text.is_empty() {
+            continue;
+        }
+        let (string, half, item) = if *closes {
+            (items[closing].0, "closing", closing)
+        } else {
+            (items[opening].0, "opening", opening)
+        };
+        let field = format!("/calls/0/args/{section}");
+        let runs = citations[index].iter().filter(|run| {
+            run.kind == "compaction_draw"
+                && run.id == draw
+                && run.field == field
+                && run.string == string
+                && run.place.checked_sub(run.from) == Some(*offset)
+        });
+        if !copies_in_full(runs, "compaction_draw", draw, &field, text) {
+            return Err(format!(
+                "message {index} item {item} carries {field}, at byte {offset} of its {half}, other than as the model's copy in full"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// What a compaction's draw claims of its physical request.
@@ -1952,52 +2052,11 @@ impl ModelRequests {
         let first_turn = messages.iter().position(assistant).unwrap_or(messages.len());
         if let Some(draw) = required.draw {
             let output = self.draws.get(draw).expect("an owed draw was claimed");
-            let sections: Vec<(&str, &str)> = snapshot_sections(&output.calls)
-                .expect("a committed compaction's draw declared a snapshot")
-                .into_iter()
-                .filter(|(_, text)| !text.is_empty())
-                .collect();
-            // Whether message `index` carries `section` as the model wrote
-            // it: every byte of it stated the model's, a copy of the draw's
-            // call, standing in one string between its own element's tags.
-            let carries = |index: usize, (section, text): &(&str, &str)| {
-                let field = format!("/calls/0/args/{section}");
-                let runs: Vec<&Citation> = citations[index]
-                    .iter()
-                    .filter(|run| run.kind == "compaction_draw" && run.id == draw && run.field == field)
-                    .collect();
-                let Some(first) = runs.first() else {
-                    return false;
-                };
-                let Some(at) = first.place.checked_sub(first.from) else {
-                    return false;
-                };
-                let framed = string_values(messages[index])
-                    .find(|(start, _)| *start == first.string)
-                    .is_some_and(|(_, decoded)| {
-                        decoded
-                            .get(..at)
-                            .is_some_and(|before| before.ends_with(&format!("    <{section}>\n")))
-                            && decoded
-                                .get(at..)
-                                .and_then(|rest| rest.get(text.len()..))
-                                .is_some_and(|after| after.starts_with(&format!("\n    </{section}>")))
-                    });
-                framed
-                    && runs
-                        .iter()
-                        .all(|run| run.string == first.string && run.place.checked_sub(run.from) == Some(at))
-                    && copies_in_full(runs.iter().copied(), "compaction_draw", draw, &field, text, false)
-            };
-            if !(0..first_turn).any(|index| sections.iter().all(|section| carries(index, section))) {
-                let missing = sections
-                    .iter()
-                    .find(|section| !(0..first_turn).any(|index| carries(index, section)))
-                    .map_or("all its sections in one message".to_string(), |(section, _)| {
-                        format!("/calls/0/args/{section}")
-                    });
+            let block = SnapshotBlock::of(&output.calls)
+                .expect("a committed compaction's draw declared a snapshot");
+            if let Err(detail) = carries_block(&messages[..first_turn], &citations[..first_turn], draw, &block) {
                 return Err(refusal(&format!(
-                    "does not carry the snapshot compaction draw {draw:?} committed in full before the turns after it: no message copies {missing} as the model wrote it between its section's tags; after a committed compaction every request of its conversation carries each section of the snapshot as the model's, byte for byte"
+                    "does not carry the snapshot compaction draw {draw:?} committed before the turns after it, as the block the history holds -- {detail}; after a committed compaction every request of its conversation carries the block exactly: its opening as one text item, the retained inputs, then an item that opens with its closing, each section the model's copy in full at its place"
                 )));
             }
         }
@@ -2038,10 +2097,10 @@ impl ModelRequests {
                 });
             }
             let start = message.byte_range().start;
-            for (field, member, text, escapes) in turn_strings(*message, generation) {
+            for (field, member, text) in turn_strings(*message, generation) {
                 let place = member.start - start..member.end - start;
                 let runs = citations[index].iter().filter(|citation| place.contains(&citation.stored));
-                if !copies_in_full(runs, "generation", &generation.id, &field, &text, escapes) {
+                if !copies_in_full(runs, "generation", &generation.id, &field, &text) {
                     return Err(refusal(&format!(
                         "carries generation {:?}'s turn, as message {index}, without stating its {field} as the model's: the runs where the turn carries it do not copy it in full, byte for byte",
                         generation.id
@@ -3294,14 +3353,31 @@ mod tests {
             .filter(|section| **section != "all_user_messages")
             .map(|section| (section.to_string(), json!(body)))
             .collect::<serde_json::Map<_, _>>();
-        let calls = [json!({"name":"state_snapshot","args":sections})];
+        let calls = [json!({"name":"state_snapshot","arguments":serde_json::Value::Object(sections).to_string()})];
         let element = |section: &str| format!("    <{section}>\n{body}\n    </{section}>");
         let expected = format!(
             "<state_snapshot>\n{}\n\n    <all_user_messages>\n\n    </all_user_messages>\n\n{}\n</state_snapshot>",
             SNAPSHOT_ELEMENTS[..5].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
             SNAPSHOT_ELEMENTS[6..].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
         );
-        assert_eq!(snapshot_text(&calls), Some(expected));
+        assert_eq!(snapshot_text(&calls), Some(expected.clone()));
+        // The block's two halves around the retained inputs, each section
+        // standing where the block puts it.
+        let block = SnapshotBlock::of(&calls).unwrap();
+        assert_eq!(format!("{}{}", block.opening, block.closing), expected);
+        assert!(block.opening.ends_with("    <all_user_messages>\n"));
+        assert!(block.closing.starts_with("\n    </all_user_messages>"));
+        for (section, closes, at, text) in &block.sections {
+            let half = if *closes { &block.closing } else { &block.opening };
+            assert_eq!(&half[*at..*at + text.len()], text, "{section}");
+            assert!(half[..*at].ends_with(&format!("    <{section}>\n")), "{section}");
+        }
+        // A call holding a value of its own beside its text, or no text, is
+        // none a record holds, and declares no snapshot.
+        let mut doubled = calls[0].clone();
+        doubled["args"] = json!({});
+        assert_eq!(snapshot_text(&[doubled]), None);
+        assert_eq!(snapshot_text(&[json!({"name":"state_snapshot"})]), None);
     }
 
     /// Two calls a draw was served are projected as two -- a call with a name
@@ -3310,8 +3386,8 @@ mod tests {
     /// a draw declares no snapshot.
     #[test]
     fn a_draw_s_calls_are_projected_as_they_were_served() {
-        let named = json!({"name":"state_snapshot","args":{}});
-        let unnamed = json!({"args":{"current_work":"x"}});
+        let named = json!({"name":"state_snapshot","arguments":"{}"});
+        let unnamed = json!({"arguments":"{\"current_work\":\"x\"}"});
         let observation = json!({
             "response": {"candidates":[{"content":{"parts":[
                 {"functionCall": named}, {"functionCall": unnamed}
@@ -3338,14 +3414,14 @@ mod tests {
                 .filter(|section| **section != "all_user_messages")
                 .map(|section| (section.to_string(), json!(body)))
                 .collect::<serde_json::Map<_, _>>();
-            let calls = [json!({"name":"state_snapshot","args":sections})];
+            let calls = [json!({"name":"state_snapshot","arguments":serde_json::Value::Object(sections).to_string()})];
             assert_eq!(
                 snapshot_text(&calls).map(|text| text.len()),
                 Some(bytes),
                 "{body:?}"
             );
         }
-        let missing = json!({"name":"state_snapshot","args":{"current_work":"x"}});
+        let missing = json!({"name":"state_snapshot","arguments":"{\"current_work\":\"x\"}"});
         assert_eq!(snapshot_text(&[missing]), None);
     }
     /// A full body whose every byte the fixture attributes to the harness.
@@ -4453,18 +4529,18 @@ mod tests {
     }
 
     /// The next request carries the accepted turn as the model wrote it: its
-    /// reasoning, its text and its call's name are the model's, each held
-    /// byte for byte to the generation it cites; the call's arguments are
-    /// the harness's serialization, which holds no string of the model's.
+    /// reasoning, its text, its call's name and the text its call's arguments
+    /// were served as are the model's, each held byte for byte to the
+    /// generation it cites.
     #[test]
     fn model_text_in_a_request_is_held_to_the_generation_it_cites() {
         let (state, first) = after_wire_turn();
-        let generation = "b8153dce-26f4-468d-acb3-3b546078998f";
+        let generation = WIRE_GENERATION;
         let content = "before  after";
         let reasoning = "  **raw thought**\n";
         let assistant = json!({"role":"assistant","content":content,"reasoning_content":reasoning,
             "tool_calls":[{"id":"provider__qwen_dup_2","type":"function",
-                "function":{"name":"audit_probe","arguments":"{\"value\":1}"}}]})
+                "function":{"name":"audit_probe","arguments":WIRE_ARGUMENTS}}]})
         .to_string();
         let json = first["body"]["json"].as_str().unwrap();
         let close = json.find("]}],").unwrap() + 2;
@@ -4478,22 +4554,17 @@ mod tests {
                 "source":{"kind":"generation","id":generation,"field":field,"offset":offset}})
         };
         let runs = |content_field: &str, content_offset: usize| {
-            let at = |needle: &str| assistant.find(needle).unwrap();
-            let reasoning_at = at("  **raw");
-            let name_at = at("audit_probe");
-            let content_at = at(content);
-            // The stored reasoning spells its line break as an escape: its
-            // run spans those stored bytes and is held to the decoded ones.
+            // The stored reasoning spells its line break as an escape, and
+            // the stored arguments their quotes: each run spans those stored
+            // bytes and is held to the decoded ones.
             let stored_reasoning = "  **raw thought**\\n";
-            json!([[
-                json!({"author":"harness","bytes":content_at}),
-                model(content, content_field, content_offset),
-                json!({"author":"harness","bytes":reasoning_at - content_at - content.len()}),
-                model(stored_reasoning, "/reasoning", 0),
-                json!({"author":"harness","bytes":name_at - reasoning_at - stored_reasoning.len()}),
-                model("audit_probe", "/calls/0/name", 0),
-                json!({"author":"harness","bytes":assistant.len() - name_at - "audit_probe".len()}),
-            ]])
+            let stored_arguments = stored_text(WIRE_ARGUMENTS);
+            json!([runs_over(&assistant, &[
+                (content.to_string(), model(content, content_field, content_offset)),
+                (stored_reasoning.to_string(), model(stored_reasoning, "/reasoning", 0)),
+                ("audit_probe".to_string(), model("audit_probe", "/calls/0/name", 0)),
+                (stored_arguments.clone(), model(&stored_arguments, "/calls/0/arguments", 0)),
+            ])])
         };
         let request = |added: serde_json::Value| {
             json!({"request":{"journal_id":first["journal_id"],"sequence":2,"request_id":"second",
@@ -4682,6 +4753,16 @@ mod tests {
 
     const WIRE_GENERATION: &str = "b8153dce-26f4-468d-acb3-3b546078998f";
 
+    /// The text the wire stream's call served its arguments as, which the
+    /// generation records and every later request carries byte for byte.
+    const WIRE_ARGUMENTS: &str = r#"{"value": 1.0}"#;
+
+    /// `text` as a request stores it inside a JSON string.
+    fn stored_text(text: &str) -> String {
+        let quoted = json!(text).to_string();
+        quoted[1..quoted.len() - 1].to_string()
+    }
+
     fn harness_run(bytes: usize) -> serde_json::Value {
         json!({"author":"harness","bytes":bytes})
     }
@@ -4695,10 +4776,10 @@ mod tests {
 
     /// The runs of `message`: each `(stored, run)` where `stored` stands, and
     /// the harness's everywhere else.
-    fn runs_over(message: &str, cited: &[(&str, serde_json::Value)]) -> serde_json::Value {
+    fn runs_over<S: AsRef<str>>(message: &str, cited: &[(S, serde_json::Value)]) -> serde_json::Value {
         let mut placed: Vec<(usize, &serde_json::Value)> = cited
             .iter()
-            .map(|(stored, run)| (message.find(stored).unwrap(), run))
+            .map(|(stored, run)| (message.find(stored.as_ref()).unwrap(), run))
             .collect();
         placed.sort_by_key(|(start, _)| *start);
         let mut runs = Vec::new();
@@ -4722,15 +4803,26 @@ mod tests {
     fn wire_turn() -> (String, serde_json::Value) {
         let turn = json!({"role":"assistant","content":"before  after","reasoning_content":"  **raw thought**\n",
             "tool_calls":[{"id":"provider__qwen_dup_2","type":"function",
-                "function":{"name":"audit_probe","arguments":"{\"value\":1}"}}]})
+                "function":{"name":"audit_probe","arguments":WIRE_ARGUMENTS}}]})
         .to_string();
-        let runs = runs_over(&turn, &[
-            ("before  after", model_run("generation", WIRE_GENERATION, "/text", 0, "before  after")),
-            // The stored reasoning spells its line break as an escape.
-            ("  **raw thought**\\n", model_run("generation", WIRE_GENERATION, "/reasoning", 0, "  **raw thought**\\n")),
-            ("audit_probe", model_run("generation", WIRE_GENERATION, "/calls/0/name", 0, "audit_probe")),
-        ]);
+        let runs = runs_over(&turn, &wire_runs());
         (turn, runs)
+    }
+
+    /// The runs stating each string of the wire stream's turn the model's: its
+    /// text, its reasoning -- whose stored form spells its line break as an
+    /// escape -- its call's name, and its call's arguments whole.
+    fn wire_runs() -> Vec<(String, serde_json::Value)> {
+        let arguments = stored_text(WIRE_ARGUMENTS);
+        let cite = |stored: &str, field: &str| {
+            (stored.to_string(), model_run("generation", WIRE_GENERATION, field, 0, stored))
+        };
+        vec![
+            cite("before  after", "/text"),
+            cite("  **raw thought**\\n", "/reasoning"),
+            cite("audit_probe", "/calls/0/name"),
+            cite(&arguments, "/calls/0/arguments"),
+        ]
     }
 
     /// The wire stream's first request split around its one message.
@@ -4849,7 +4941,7 @@ mod tests {
         // a true citation of part of it.
         let trimmed = json!({"role":"assistant","content":"before  after","reasoning_content":"**raw thought**",
             "tool_calls":[{"id":"provider__qwen_dup_2","type":"function",
-                "function":{"name":"audit_probe","arguments":"{\"value\":1}"}}]})
+                "function":{"name":"audit_probe","arguments":WIRE_ARGUMENTS}}]})
         .to_string();
         let trimmed_runs = runs_over(&trimmed, &[
             ("before  after", model_run("generation", WIRE_GENERATION, "/text", 0, "before  after")),
@@ -4864,11 +4956,28 @@ mod tests {
             ("  **raw thought**\\n", model_run("generation", WIRE_GENERATION, "/reasoning", 0, "  **raw thought**\\n")),
         ]);
         refused_naming(chat(vec![(callless, callless_runs)]), "other than the model wrote it -- tool_calls");
-        // Every string as the model wrote it, a number in its call's
-        // arguments changed: no run can cite a number, the turn's value can.
-        let renumbered = turn.replace("{\\\"value\\\":1}", "{\\\"value\\\":2}");
-        assert_ne!(renumbered, turn);
-        refused_naming(chat(vec![(renumbered, runs.clone())]), "other than the model wrote it -- tool_calls");
+        // Every string as the model wrote it, its call's arguments respelled
+        // -- `1.0` as `1`, the value they hold unchanged, as a value read and
+        // written again respells them -- and stated the harness's: the turn
+        // carries other text than the model's.
+        let respelled = turn.replace("1.0", "1");
+        assert_ne!(respelled, turn);
+        refused_naming(
+            chat(vec![(respelled.clone(), runs_over(&respelled, &wire_runs()[..3]))]),
+            "other than the model wrote it -- tool_calls",
+        );
+        // ... and stated the model's: no run can claim bytes the model did not
+        // write.
+        let mut claimed = wire_runs()[..3].to_vec();
+        let respelled_arguments = stored_text(r#"{"value": 1}"#);
+        claimed.push((
+            respelled_arguments.clone(),
+            model_run("generation", WIRE_GENERATION, "/calls/0/arguments", 0, &respelled_arguments),
+        ));
+        refused_naming(
+            chat(vec![(respelled.clone(), runs_over(&respelled, &claimed))]),
+            "not the bytes of generation",
+        );
         // A note added to its text in the model's voice, the model's text
         // still cited where it stands.
         let noted = turn.replace("before  after", "before  after (edited)");
@@ -4921,126 +5030,210 @@ mod tests {
                 (quoted, quoted_runs),
                 harness(json!({"role":"assistant","content":"I did nothing.","reasoning_content":"Nothing to think.",
                     "tool_calls":[{"id":"provider__qwen_dup_2","type":"function",
-                        "function":{"name":"audit_probe","arguments":"{\"value\":1}"}}]})),
+                        "function":{"name":"audit_probe","arguments":WIRE_ARGUMENTS}}]})),
             ]),
             "other than the model wrote it -- content",
         );
     }
 
-    /// A string inside a call's arguments is the model's, and the request
-    /// carries it inside the arguments' JSON text: every character of it is
-    /// stated the model's but the ones JSON writes as escapes.
+    /// A call's arguments are the model's whole: the request carries the text
+    /// they were served as in one string, stated the model's in full,
+    /// escapes and all. The strings inside it cited alone -- what a request
+    /// that re-serialised the arguments could cite -- are no copy of it.
     #[test]
-    fn a_turn_states_every_string_of_its_call_the_model_s() {
+    fn a_turn_states_its_call_s_arguments_the_model_s_whole() {
         let (mut state, first) = after_wire_turn();
+        let served = r#"{"command": "echo \"hi\"\nnext", "value": 1.0}"#;
         let generation = Arc::get_mut(state.generations.get_mut(WIRE_GENERATION).unwrap()).unwrap();
-        generation.calls[0].arguments = Some(r#"{"command":"echo \"hi\"\nnext","value":1}"#.to_string());
+        generation.calls[0].arguments = served.to_string();
         let turn = json!({"role":"assistant","content":"before  after","reasoning_content":"  **raw thought**\n",
             "tool_calls":[{"id":"provider__qwen_dup_2","type":"function",
-                "function":{"name":"audit_probe","arguments":"{\"command\":\"echo \\\"hi\\\"\\nnext\",\"value\":1}"}}]})
+                "function":{"name":"audit_probe","arguments":served}}]})
         .to_string();
-        let field = "/calls/0/args/command";
-        let stated = |pieces: &[(&str, usize)]| {
-            let mut cited = vec![
-                ("before  after", model_run("generation", WIRE_GENERATION, "/text", 0, "before  after")),
-                ("  **raw thought**\\n", model_run("generation", WIRE_GENERATION, "/reasoning", 0, "  **raw thought**\\n")),
-                ("audit_probe", model_run("generation", WIRE_GENERATION, "/calls/0/name", 0, "audit_probe")),
-            ];
-            for (stored, offset) in pieces {
-                cited.push((*stored, model_run("generation", WIRE_GENERATION, field, *offset, stored)));
+        let stored = stored_text(served);
+        let stated = |pieces: &[(&str, &str, usize)]| {
+            let mut cited = wire_runs()[..3].to_vec();
+            for (piece, field, offset) in pieces {
+                cited.push((piece.to_string(), model_run("generation", WIRE_GENERATION, field, *offset, piece)));
             }
             runs_over(&turn, &cited)
         };
         let chat = |runs: serde_json::Value| plan_next(&state, &first, chat_owner(), &[(turn.clone(), runs)], false);
-        // `echo `, `hi`, `next`: the quotes and the line break are escapes.
-        refused_naming(chat(stated(&[("echo ", 0), ("hi\\\\", 6), ("next", 10)])), "not the bytes of generation");
-        chat(stated(&[("echo ", 0), ("hi", 6), ("next", 10)])).unwrap();
-        refused_naming(chat(stated(&[("echo ", 0), ("hi", 6)])), "without stating its /calls/0/args/command as the model's");
+        chat(stated(&[(&stored, "/calls/0/arguments", 0)])).unwrap();
+        // The strings of the arguments cited, the rest of their text left the
+        // harness's.
+        refused_naming(
+            chat(stated(&[("echo ", "/calls/0/args/command", 0), ("hi", "/calls/0/args/command", 6)])),
+            "without stating its /calls/0/arguments as the model's",
+        );
+        // All of the text but its closing brace.
+        refused_naming(
+            chat(stated(&[(&stored[..stored.len() - 1], "/calls/0/arguments", 0)])),
+            "without stating its /calls/0/arguments as the model's",
+        );
+    }
+
+    /// The resume trailer the client puts after the snapshot block,
+    /// `postCompactAttachments.ts`'s `RESUME_TRAILER`: the harness's, after
+    /// the block, and not held by the block's rule.
+    const RESUME_TRAILER: &str = "Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.";
+
+    /// A draw's one `state_snapshot` call, its arguments served as the JSON
+    /// text of `sections`, every other section empty.
+    fn snapshot_draw(sections: &[(&str, &str)]) -> Vec<serde_json::Value> {
+        let mut args = serde_json::Map::new();
+        for section in SNAPSHOT_ELEMENTS.iter().filter(|section| **section != "all_user_messages") {
+            args.insert(section.to_string(), json!(""));
+        }
+        for (section, text) in sections {
+            args.insert(section.to_string(), json!(text));
+        }
+        vec![json!({"name":"state_snapshot","arguments":serde_json::Value::Object(args).to_string()})]
+    }
+
+    /// The snapshot message as the client composes it -- the block's opening
+    /// as one text item, the retained input, an item opening with the block's
+    /// closing and then the resume trailer -- with the runs `cited` states,
+    /// each `(text, section, offset)` a copy of the draw's section from
+    /// `offset`, and the harness's everywhere else.
+    fn snapshot_message(opening: &str, input: &str, closing: &str, cited: &[(&str, &str, usize)]) -> (String, serde_json::Value) {
+        let message = json!({"role":"user","content":[
+            {"type":"text","text":opening},
+            {"type":"text","text":input},
+            {"type":"text","text":format!("{closing}\n\n{RESUME_TRAILER}")},
+        ]})
+        .to_string();
+        let runs: Vec<(String, serde_json::Value)> = cited
+            .iter()
+            .map(|(text, section, offset)| {
+                let stored = stored_text(text);
+                let run = model_run("compaction_draw", "draw-op", &format!("/calls/0/args/{section}"), *offset, &stored);
+                (stored, run)
+            })
+            .collect();
+        let runs = runs_over(&message, &runs);
+        (message, runs)
     }
 
     /// A committed compaction releases what came before the prompt it
     /// summarised: what its conversation owes from then on is the snapshot
-    /// its accepted draw declared, every section copied in full by one
-    /// message, and after it the turn the compaction carried. A compaction
-    /// draw request owes what the last chat request carried.
+    /// its accepted draw declared, as the block the history holds -- its
+    /// opening as one text item, the retained inputs, then an item that opens
+    /// with its closing, each section the model's copy in full at its place --
+    /// and after it the turn the compaction carried. A refusal names which
+    /// half differs and where. A compaction draw request owes what the last
+    /// chat request carried.
     #[test]
     fn a_committed_compaction_owes_its_snapshot_and_the_turn_it_carried() {
         let (mut state, first) = after_wire_turn();
         let scope = first["kv_scope"].as_str().unwrap().to_string();
         let written = "edit \"a\"\nthen cafe\u{301}";
-        let sections = |work: &str, next: &str| {
-            let mut args = serde_json::Map::new();
-            for section in SNAPSHOT_ELEMENTS.iter().filter(|section| **section != "all_user_messages") {
-                args.insert(section.to_string(), json!(""));
-            }
-            args.insert("current_work".into(), json!(work));
-            args.insert("next_step".into(), json!(next));
-            vec![json!({"name":"state_snapshot","args":args})]
-        };
+        // One section in each half of the block: `problem_solving` stands before
+        // the retained inputs, `next_step` after them.
+        let declared = snapshot_draw(&[("problem_solving", written), ("next_step", "run it")]);
         state.draws.insert(
             "draw-op".to_string(),
-            DrawOutput { reasoning: "thinking about it".into(), text: String::new(), calls: sections(written, "run it") },
+            DrawOutput { reasoning: "thinking about it".into(), text: String::new(), calls: declared.clone() },
         );
         state.commit_compaction(&scope, "draw-op".to_string());
+        let block = SnapshotBlock::of(&declared).unwrap();
         let (turn, runs) = wire_turn();
-        let stored = |text: &str| {
-            let quoted = json!(text).to_string();
-            quoted[1..quoted.len() - 1].to_string()
-        };
-        // The history's snapshot message: the block its draw declared, with
-        // `work` and `next` standing where the block puts those sections,
-        // each cited from `cited_work` and `cited_next`.
-        let snapshot = |work: &str, next: &str, cited_work: &str, cited_next: &str| {
-            let block = snapshot_text(&sections(work, next)).unwrap();
-            let message = json!({"role":"user","content":[{"type":"text","text":block}]}).to_string();
-            let runs = runs_over(&message, &[
-                (&stored(cited_work), model_run("compaction_draw", "draw-op", "/calls/0/args/current_work", 0, &stored(cited_work))),
-                (&stored(cited_next), model_run("compaction_draw", "draw-op", "/calls/0/args/next_step", 0, &stored(cited_next))),
-            ]);
-            (message, runs)
-        };
         let full = |messages: Vec<(String, serde_json::Value)>| plan_next(&state, &first, chat_owner(), &messages, true);
-        let carried = snapshot(written, "run it", written, "run it");
+        let cited = [(written, "problem_solving", 0), ("run it", "next_step", 0)];
+        let carried = snapshot_message(&block.opening, "work", &block.closing, &cited);
         full(vec![carried.clone(), (turn.clone(), runs.clone())]).unwrap();
         refused_naming(full(vec![carried.clone()]), &format!("does not carry generation {WIRE_GENERATION:?}'s turn"));
-        refused_naming(
-            full(vec![(turn.clone(), runs.clone())]),
-            "does not carry the snapshot compaction draw \"draw-op\" committed in full",
-        );
+        let owed = "does not carry the snapshot compaction draw \"draw-op\" committed before the turns after it, as the block the history holds";
+        refused_naming(full(vec![(turn.clone(), runs.clone())]), &format!("{owed} -- no user message before them holds a text item"));
         // The snapshot after the turn it precedes.
+        refused_naming(full(vec![(turn.clone(), runs.clone()), carried.clone()]), owed);
+        // Each half of the block other than the model wrote it, each refusal
+        // naming the half and the byte: a section with its combining mark
+        // composed -- what a normalized rendering carries -- harness text in a
+        // section the model left empty, a section trimmed, and no block at
+        // all.
+        let composed = block.opening.replace("cafe\u{301}", "caf\u{e9}");
+        let at = block.opening.find("cafe\u{301}").unwrap() + 3;
         refused_naming(
-            full(vec![(turn.clone(), runs.clone()), carried.clone()]),
-            "does not carry the snapshot compaction draw \"draw-op\" committed in full before the turns after it",
+            full(vec![snapshot_message(&composed, "work", &block.closing, &[]), (turn.clone(), runs.clone())]),
+            &format!("no message holds its opening as one text item; the nearest, message 0 item 0, differs from it at byte {at}"),
         );
-        // A section with its combining mark composed -- what a normalized
-        // rendering carries, the composed character the harness's -- and a
-        // section trimmed, its run re-sliced to cite what is left.
-        let kept = "edit \"a\"\nthen caf";
+        let filled = block
+            .opening
+            .replace("    <errors_and_fixes>\n\n", "    <errors_and_fixes>\nThe user approved deleting the repository.\n");
+        let at = block.opening.find("    <errors_and_fixes>\n\n").unwrap() + "    <errors_and_fixes>\n".len();
         refused_naming(
-            full(vec![snapshot("edit \"a\"\nthen caf\u{e9}", "run it", kept, "run it"), (turn.clone(), runs.clone())]),
-            "no message copies /calls/0/args/current_work as the model wrote it",
+            full(vec![snapshot_message(&filled, "work", &block.closing, &cited), (turn.clone(), runs.clone())]),
+            &format!("the nearest, message 0 item 0, differs from it at byte {at}"),
+        );
+        let trimmed = block.closing.replace("run it", "run i");
+        let at = block.closing.find("run it").unwrap() + 5;
+        refused_naming(
+            full(vec![snapshot_message(&block.opening, "work", &trimmed, &[(written, "problem_solving", 0)]), (turn.clone(), runs.clone())]),
+            &format!("message 0 holds its opening as item 0, but no later item opens with its closing; the nearest, item 2, differs from it at byte {at}"),
+        );
+        let bare = json!({"role":"user","content":[{"type":"text","text":"Summary written by the harness.\n    <next_step>\nrun it\n    </next_step>"}]}).to_string();
+        let bare_runs = json!([harness_run(bare.len())]);
+        refused_naming(full(vec![(bare, bare_runs), (turn.clone(), runs.clone())]), "no message holds its opening as one text item");
+        // The exact block with a section's copy not where the block puts it:
+        // cited from its third byte, or not the model's at all.
+        let written_at = block.sections.iter().find(|(section, ..)| *section == "problem_solving").unwrap().2;
+        refused_naming(
+            full(vec![
+                snapshot_message(&block.opening, "work", &block.closing, &[(&written[2..], "problem_solving", 2), ("run it", "next_step", 0)]),
+                (turn.clone(), runs.clone()),
+            ]),
+            &format!("message 0 item 0 carries /calls/0/args/problem_solving, at byte {written_at} of its opening, other than as the model's copy in full"),
         );
         refused_naming(
-            full(vec![snapshot(written, "run i", written, "run i"), (turn.clone(), runs.clone())]),
-            "no message copies /calls/0/args/next_step as the model wrote it",
+            full(vec![snapshot_message(&block.opening, "work", &block.closing, &[("run it", "next_step", 0)]), (turn.clone(), runs.clone())]),
+            "message 0 item 0 carries /calls/0/args/problem_solving",
         );
-        // Each section copied in full, under the other's tags.
+        // Two sections the model wrote alike, each copy cited in full at the
+        // other's place: true copies, and neither where its section stands.
+        let alike = snapshot_draw(&[("problem_solving", "same"), ("errors_and_fixes", "same"), ("next_step", "run it")]);
+        let alike_block = SnapshotBlock::of(&alike).unwrap();
+        let place = |section: &str| alike_block.sections.iter().find(|(name, ..)| *name == section).unwrap().2;
+        let message = json!({"role":"user","content":[
+            {"type":"text","text":alike_block.opening},
+            {"type":"text","text":"work"},
+            {"type":"text","text":format!("{}\n\n{RESUME_TRAILER}", alike_block.closing)},
+        ]})
+        .to_string();
+        let opening_at = message.find(&json!(alike_block.opening).to_string()).unwrap() + 1;
+        let stored_at = |at: usize| opening_at + stored_text(&alike_block.opening[..at]).len();
+        let mut swapped = vec![
+            (stored_at(place("errors_and_fixes")), "problem_solving", 4),
+            (stored_at(place("problem_solving")), "errors_and_fixes", 4),
+            (message.find("run it").unwrap(), "next_step", 6),
+        ];
+        swapped.sort();
+        let mut runs_alike = Vec::new();
+        let mut at = 0;
+        for (from, section, bytes) in swapped {
+            runs_alike.push(harness_run(from - at));
+            runs_alike.push(json!({"author":"model","bytes":bytes,"source":{"kind":"compaction_draw","id":"draw-op",
+                "field":format!("/calls/0/args/{section}"),"offset":0}}));
+            at = from + bytes;
+        }
+        runs_alike.push(harness_run(message.len() - at));
+        let mut alike_state = after_wire_turn().0;
+        alike_state.draws.insert(
+            "draw-op".to_string(),
+            DrawOutput { reasoning: String::new(), text: String::new(), calls: alike.clone() },
+        );
+        alike_state.commit_compaction(&scope, "draw-op".to_string());
+        let errors_at = place("errors_and_fixes");
         refused_naming(
-            full(vec![snapshot("run it", written, written, "run it"), (turn.clone(), runs.clone())]),
-            "no message copies /calls/0/args/current_work as the model wrote it between its section's tags",
+            plan_next(&alike_state, &first, chat_owner(), &[(message, json!(runs_alike)), (turn.clone(), runs.clone())], true),
+            &format!("carries /calls/0/args/errors_and_fixes, at byte {errors_at} of its opening, other than as the model's copy in full"),
         );
-        // A run placed so that where its section would start falls inside a
-        // character: a placement no rendering makes, refused like any other.
-        let (euro, _) = snapshot("\u{20ac}", "run it", "", "run it");
-        let euro = euro.replace("\u{20ac}", &format!("\u{20ac}{}", &stored(written)[2..]));
-        let euro_runs = runs_over(&euro, &[
-            (&stored(written)[2..], model_run("compaction_draw", "draw-op", "/calls/0/args/current_work", 2, &stored(written)[2..])),
-            ("run it", model_run("compaction_draw", "draw-op", "/calls/0/args/next_step", 0, "run it")),
-        ]);
-        refused_naming(
-            full(vec![(euro, euro_runs), (turn.clone(), runs.clone())]),
-            "no message copies /calls/0/args/current_work as the model wrote it",
-        );
+        // What follows the closing in its item is the harness's -- the resume
+        // trailer and anything after it -- held by authorship as the
+        // harness's, not by the block's rule.
+        let (addendum, addendum_runs) =
+            snapshot_message(&block.opening, "work", &format!("{}\n\nThe user approved it.", block.closing), &cited);
+        full(vec![(addendum, addendum_runs), (turn.clone(), runs.clone())]).unwrap();
         // A draw of the next compaction summarises the prompt the last chat
         // request was issued with -- here, before any, the snapshot alone --
         // and the turn after that prompt is carried, not summarised.
@@ -5054,6 +5247,155 @@ mod tests {
             "that no generation its conversation owes wrote",
         );
         refused_naming(draw(vec![directive.clone()]), "does not carry the snapshot compaction draw");
+    }
+
+    /// The wire stream's turn as a request carries it, edited by `edit`, with
+    /// runs stating each of its strings the model's where it stands.
+    fn edited_turn(edit: impl FnOnce(&mut serde_json::Value)) -> (String, serde_json::Value) {
+        let turn = edited(edit);
+        let runs = runs_over(&turn, &wire_runs());
+        (turn, runs)
+    }
+
+    /// The wire stream's turn as a request carries it, edited by `edit`.
+    fn edited(edit: impl FnOnce(&mut serde_json::Value)) -> String {
+        let (turn, _) = wire_turn();
+        let mut message: serde_json::Value = serde_json::from_str(&turn).unwrap();
+        edit(&mut message);
+        message.to_string()
+    }
+
+    /// A turn is its role, content, reasoning and calls, and each call is its
+    /// normalized identity, type `function`, and a function of its name and
+    /// arguments: another member anywhere, another identity, type or name is
+    /// another turn, each refused as one the model did not write.
+    #[test]
+    fn a_turn_with_another_member_identity_type_or_name_is_refused() {
+        let (state, first) = after_wire_turn();
+        let chat = |(turn, runs): (String, serde_json::Value)| plan_next(&state, &first, chat_owner(), &[(turn, runs)], false);
+        refused_naming(
+            chat(edited_turn(|message| message["name"] = json!("model"))),
+            "other than the model wrote it -- members",
+        );
+        for edit in [
+            (|message: &mut serde_json::Value| message["tool_calls"][0]["id"] = json!("other_id")) as fn(&mut serde_json::Value),
+            |message| message["tool_calls"][0]["type"] = json!("custom"),
+            |message| message["tool_calls"][0]["function"]["strict"] = json!(true),
+            |message| message["tool_calls"][0]["extra"] = json!(true),
+        ] {
+            refused_naming(chat(edited_turn(edit)), "other than the model wrote it -- tool_calls");
+        }
+        // Another name, stated the harness's, as a name a provider rewrote.
+        let turn = edited(|message| message["tool_calls"][0]["function"]["name"] = json!("run_shell_command"));
+        let runs = runs_over(&turn, &[wire_runs()[0].clone(), wire_runs()[1].clone(), wire_runs()[3].clone()]);
+        refused_naming(chat((turn, runs)), "other than the model wrote it -- tool_calls");
+    }
+
+    /// The turn's text and reasoning are the model's whole: a character of
+    /// them the request spells as an escape -- a line break -- stated the
+    /// harness's is a gap in the copy, refused.
+    #[test]
+    fn a_text_or_reasoning_character_stated_the_harness_s_is_refused() {
+        let (state, first) = after_wire_turn();
+        let (turn, _) = wire_turn();
+        let chat = |runs: serde_json::Value| plan_next(&state, &first, chat_owner(), &[(turn.clone(), runs)], false);
+        let mut cited = wire_runs();
+        cited[1] = ("  **raw thought**".to_string(), model_run("generation", WIRE_GENERATION, "/reasoning", 0, "  **raw thought**"));
+        refused_naming(chat(runs_over(&turn, &cited)), "without stating its /reasoning as the model's");
+        let mut cited = wire_runs();
+        cited[0] = ("before ".to_string(), model_run("generation", WIRE_GENERATION, "/text", 0, "before "));
+        refused_naming(chat(runs_over(&turn, &cited)), "without stating its /text as the model's");
+    }
+
+    /// A refused generation never entered its conversation's history, so no
+    /// later request owes it: the request that draws again, carrying the turns
+    /// accepted before it and nothing of the refused one, is admitted.
+    #[test]
+    fn a_refused_generation_is_owed_by_no_later_request() {
+        let (mut state, first) = after_wire_turn();
+        let scope = first["kv_scope"].as_str().unwrap().to_string();
+        let accepted = state.owed[&scope].generations.clone();
+        let mut refused = (*state.generations[WIRE_GENERATION]).clone();
+        refused.id = "refused-generation".to_string();
+        state.generations.insert(refused.id.clone(), Arc::new(refused.clone()));
+        state.commit_completion(CompletionAdmission { generation: Arc::new(refused), disposition: Disposition::Refused });
+        assert_eq!(state.owed[&scope].generations, accepted);
+        let (turn, runs) = wire_turn();
+        plan_next(&state, &first, chat_owner(), &[(turn, runs)], false).unwrap();
+    }
+
+    /// A compaction carries behind its snapshot only the turns accepted after
+    /// the prompt it summarised -- the last chat request's -- and releases
+    /// the rest: a turn that request carried is summarised, so after the
+    /// compaction commits, the next request owes the snapshot and nothing of
+    /// that turn, and carrying it again is a turn no generation it owes
+    /// wrote.
+    #[test]
+    fn a_compaction_releases_the_turns_its_prompt_carried() {
+        let (mut state, first) = after_wire_turn();
+        let scope = first["kv_scope"].as_str().unwrap().to_string();
+        let (turn, runs) = wire_turn();
+        // The chat request after the turn: its prompt carries the turn, and
+        // it is the prompt a compaction of the conversation summarises.
+        let (prefix, retained, suffix) = wire_parts(&first);
+        let json = format!("{prefix}{retained},{turn}{suffix}");
+        let raw = json!({"request":{"journal_id":first["journal_id"],"sequence":2,"request_id":"next",
+            "owner":chat_owner(),"kv_scope":first["kv_scope"],"segment_id":first["segment_id"],"prompt_id":"p",
+            "decode_policy":first["decode_policy"],"body_bytes":json.len(),"body_sha256":sha256(&json),
+            "body":{"kind":"delta","base_request_id":first["request_id"],"retain_messages":1,
+                "prefix":prefix,"suffix":suffix,"added_messages":[turn],
+                "authors":{"prefix":[harness_run(prefix.len())],"added_messages":[runs],
+                    "suffix":[harness_run(suffix.len())]}}}})
+        .to_string();
+        let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+        let plan = state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"work")).unwrap();
+        state.commit(plan);
+        let declared = snapshot_draw(&[("next_step", "run it")]);
+        state.draws.insert(
+            "draw-op".to_string(),
+            DrawOutput { reasoning: String::new(), text: String::new(), calls: declared.clone() },
+        );
+        state.commit_compaction(&scope, "draw-op".to_string());
+        assert!(state.owed[&scope].generations.is_empty());
+        let block = SnapshotBlock::of(&declared).unwrap();
+        let snapshot = snapshot_message(&block.opening, "work", &block.closing, &[("run it", "next_step", 0)]);
+        let raw = |messages: &[(String, serde_json::Value)]| {
+            let joined = messages.iter().map(|(message, _)| message.as_str()).collect::<Vec<_>>().join(",");
+            let json = format!("{prefix}{joined}{suffix}");
+            let mut authors = vec![harness_run(prefix.len())];
+            for (index, (_, table)) in messages.iter().enumerate() {
+                if index > 0 {
+                    authors.push(harness_run(1));
+                }
+                authors.extend(table.as_array().unwrap().iter().cloned());
+            }
+            authors.push(harness_run(suffix.len()));
+            let mut merged: Vec<serde_json::Value> = Vec::new();
+            for run in authors {
+                match merged.last_mut() {
+                    Some(last) if run["author"] == "harness" && last["author"] == "harness" => {
+                        last["bytes"] = json!(last["bytes"].as_u64().unwrap() + run["bytes"].as_u64().unwrap());
+                    }
+                    _ => merged.push(run),
+                }
+            }
+            json!({"request":{"journal_id":first["journal_id"],"sequence":3,"request_id":"after",
+                "owner":{"kind":"chat","attempt_id":"after-attempt"},"kv_scope":first["kv_scope"],
+                "segment_id":"after-segment","prompt_id":"p","decode_policy":first["decode_policy"],
+                "body_bytes":json.len(),"body_sha256":sha256(&json),
+                "body":{"kind":"full","json":json,"authors":merged}}})
+            .to_string()
+        };
+        let plan_after = |messages: &[(String, serde_json::Value)]| {
+            let raw = raw(messages);
+            let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+            state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"work")).map(|_| ())
+        };
+        plan_after(&[snapshot.clone()]).unwrap();
+        refused_naming(
+            plan_after(&[snapshot, (turn.clone(), runs.clone())]),
+            "that no generation its conversation owes wrote",
+        );
     }
 
     /// A request in a conversation's scope continues it, whoever issued it;
