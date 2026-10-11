@@ -388532,7 +388532,7 @@ diff --git a/packages/core/src/test-utils/served-token-counts.json b/packages/co
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/test-utils/served-token-counts.json
-@@ -0,0 +1,1022 @@
+@@ -0,0 +1,1023 @@
 +{
 +  "tokenizer": {
 +    "file": "tokenizer.json",
@@ -388807,7 +388807,6 @@ new file mode 100644
 +    "3c4a6d236f3c0e33107a0db50d7b7ac768cd106edf28cecfcf2acace6a7350f0": 3218,
 +    "3e31050cc61bff37d40c12c16adc564519db33ff49d6dc5af9f448d52de51734": 3258,
 +    "3e4d98382af8b89c529d3aec40aa86b87c83ce63888f5dc3a4ac7d172d471fbe": 18378,
-+    "3e674f5b63be4dcbfd8615d5d33f1d2f12dc4668b81bde6acd84d07db1e486fb": 58,
 +    "3e7f3a6dc58993cd906c35fc3d4dc4b5a80c1276466619664472541f54dfc7c7": 13199,
 +    "3ed32da374e230c6228e132c8c334191759286fee4813e1ed4eba4d9b9366ea7": 7,
 +    "3fc4ccfe745870e2c0d99f71f30ff0656c8dedd41cc1d7d3d376b0dbe685e2f3": 1,
@@ -389336,6 +389335,7 @@ new file mode 100644
 +    "c454c0413ad7a43fa5611146d5634f64b56df2510030eded27ed3f06fa5a75be": 71,
 +    "c4879a52587aecc305b66148e7bdbd8e986392be5e5dd97681b0dad970979c85": 148,
 +    "c4e6aa1bd46692d92b8d7b9277e8974dbf36e5a211c03a5bd68b83877a2962da": 3,
++    "c4fbc4d22c52bdfdba30623a1b0b4db71d86f4e3c753c901539d564d7d9181ca": 51,
 +    "c4fe53324a1717f0886d3aacd8935d0d003150ddcb997ec6ed460283033d58da": 3252,
 +    "c6590c49b9ab375a5555f29fc2500c264806f782d7231506d2d137478bc1fb12": 4209,
 +    "c66dcde496752d65623198b4b3fbc848f7d2f3a47bd12ef1213bf116e8e8ccfd": 6560,
@@ -389486,6 +389486,7 @@ new file mode 100644
 +    "ed9c523e4da2e574544c05f93dcd5f9e1053cd7824a21c295e37330cf0bd5eb8": 12971,
 +    "edf06d37bdfcb29bc0b7aacccfc562ef730d1b7b382f4cb5978c8215fa00bce3": 3148,
 +    "edf5d529a08690a00e75f5529af8da2f2a707ccb10a91a190dcf661e8f733331": 15985,
++    "ee8d0ec58d7f0c84b1bf2e557eb547a219bc8eac82b5ccf0cc973453fe79ea88": 16245,
 +    "eeb2d4849155f31eb0f7f2fcff2d0404c4f4fb49e82004ea66a767e88fc9f449": 12997,
 +    "ef0041ab5ad77c0339db682febc6eb09dc9fd93d31f503039833e9015ef27006": 1016,
 +    "efa5902723cd4676e697efd93f409ebd75480faa08d322ebb534c07b36a21df8": 3299,
@@ -410104,7 +410105,7 @@ diff --git a/packages/core/src/tools/priorReadEnforcement.ts b/packages/core/src
 diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
 --- a/packages/core/src/tools/read-file.test.ts
 +++ b/packages/core/src/tools/read-file.test.ts
-@@ -2,100 +2,88 @@
+@@ -2,100 +2,89 @@
   * @license
   * Copyright 2025 Google LLC
   * SPDX-License-Identifier: Apache-2.0
@@ -410141,6 +410142,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +import { errorAuthors, harnessText } from '../core/text-authorship.js';
 +import { runWithToolArguments } from '../core/tool-call-arguments.js';
 +import { spellRuns } from '../test-utils/authored-runs.js';
++import { memoryFreshnessNote } from '../memory/memoryAge.js';
 +import {
 +  countServedTokens,
 +  servedTokens,
@@ -410228,7 +410230,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        getFileService: () => new FileDiscoveryService(tempRootDir),
        getFileSystemService: () => new StandardFileSystemService(),
        getTargetDir: () => tempRootDir,
-@@ -103,14 +91,14 @@
+@@ -103,14 +92,14 @@
        storage: {
          getProjectTempDir: () => path.join(tempRootDir, '.temp'),
          getProjectDir: () => path.join(tempRootDir, '.project'),
@@ -410245,7 +410247,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        getFileReadCache: () => fileReadCache,
        getFileReadCacheDisabled: () => false,
      } as unknown as Config;
-@@ -125,77 +113,85 @@
+@@ -125,77 +114,85 @@
    });
  
    describe('build', () => {
@@ -410331,7 +410333,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        );
      });
  
-@@ -227,12 +223,13 @@
+@@ -227,12 +224,13 @@
  
      it.each([0, -1])(
        'should throw error if limit is not positive (%s)',
@@ -410345,7 +410347,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            'Limit must be a positive integer',
          );
        },
-@@ -240,76 +237,136 @@
+@@ -240,76 +238,136 @@
  
      it.each([0.5, 1.5])(
        'should throw error if limit is fractional (%s)',
@@ -410492,7 +410494,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(permission).toBe('allow');
      });
  
-@@ -317,39 +374,43 @@
+@@ -317,39 +375,43 @@
        const params: ReadFileToolParams = {
          file_path: path.join(
            Storage.getUserExtensionsDir(),
@@ -410536,7 +410538,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(permission).toBe('ask');
      });
  
-@@ -359,24 +420,26 @@
+@@ -359,24 +421,26 @@
            tempRootDir,
            '.project',
            'subagents',
@@ -410563,7 +410565,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(
          (
            invocation as ToolInvocation<ReadFileToolParams, ToolResult>
-@@ -385,24 +448,25 @@
+@@ -385,24 +449,25 @@
      });
  
      it('should handle non-normalized file paths correctly', () => {
@@ -410590,7 +410592,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          (
            invocation as ToolInvocation<ReadFileToolParams, ToolResult>
          ).getDescription(),
-@@ -410,42 +474,55 @@
+@@ -410,42 +475,55 @@
      });
    });
  
@@ -410648,7 +410650,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
      it.skipIf(process.platform === 'win32')(
        'should read a file with spaces in its name when given an escaped path',
-@@ -454,96 +531,372 @@
+@@ -454,96 +532,441 @@
          const realPath = path.join(tempRootDir, realFileName);
          const fileContent = 'Content with spaces in filename.';
          await fsp.writeFile(realPath, fileContent, 'utf-8');
@@ -410775,7 +410777,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        INLINE_BLOCK_TOKENS,
 +        filePath,
 +        undefined,
-+        false,
++        '',
 +        countServedTokens,
        );
 +      const joined = (lines: number) =>
@@ -410985,7 +410987,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        INLINE_BLOCK_TOKENS,
 +        filePath,
 +        undefined,
-+        false,
++        '',
 +        countServedTokens,
 +      );
 +      const page = content.slice(content.indexOf('\n\n---\n\n') + 7);
@@ -411009,6 +411011,75 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(content).toContain(
 +        `Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: ${pageLines.length}\n\n---\n\n`,
 +      );
++    });
++
++    it('leads a memory file older than a day with its staleness note, and pages it within one block less that note', async () => {
++      // A memory file's age is known before its page is read, so a page's room
++      // is the block less the widest statement and the very note that leads
++      // it: the page holds as many whole lines as that room allows, and the
++      // note, the statement and the page are one inline block together.
++      const previousLocal = process.env['QWEN_CODE_MEMORY_LOCAL'];
++      process.env['QWEN_CODE_MEMORY_LOCAL'] = '1';
++      try {
++        const { getAutoMemoryRoot, clearAutoMemoryRootCache } = await import(
++          '../memory/paths.js'
++        );
++        clearAutoMemoryRootCache();
++        const memRoot = getAutoMemoryRoot(tempRootDir);
++        await fsp.mkdir(memRoot, { recursive: true });
++        const memFile = path.join(memRoot, 'AGENTS.md');
++        const line = `${'x'.repeat(999)}\n`;
++        await fsp.writeFile(memFile, line.repeat(200), 'utf-8');
++        // Forty-seven days before now, so the note states the same age on
++        // every run.
++        const written = new Date(Date.now() - 47 * 86_400_000);
++        await fsp.utimes(memFile, written, written);
++        const note = memoryFreshnessNote(written.getTime());
++        expect(note).toContain('This memory is 47 days old.');
++
++        const invocation = tool.build({
++          file_path: memFile,
++          offset: 0,
++        }) as ToolInvocation<ReadFileToolParams, ToolResult>;
++        const result = await invocation.execute(abortSignal);
++        expect(result.error).toBeUndefined();
++        const content = String(result.llmContent);
++        expect(content.startsWith(`${note}Showing lines 1-`)).toBe(true);
++
++        const pageTokens = await readPageTokens(
++          INLINE_BLOCK_TOKENS,
++          memFile,
++          undefined,
++          note,
++          countServedTokens,
++        );
++        const unled = await readPageTokens(
++          INLINE_BLOCK_TOKENS,
++          memFile,
++          undefined,
++          '',
++          countServedTokens,
++        );
++        expect(pageTokens).toBe(unled - servedTokens(note));
++        const page = content.slice(content.indexOf('\n\n---\n\n') + 7);
++        const returned = page.split('\n').filter((text) => text.length > 0);
++        expect(returned.every((text) => text === 'x'.repeat(999))).toBe(true);
++        const joined = (lines: number) =>
++          Array(lines).fill('x'.repeat(999)).join('\n');
++        expect(servedTokens(joined(returned.length))).toBeLessThanOrEqual(
++          pageTokens,
++        );
++        expect(servedTokens(joined(returned.length + 1))).toBeGreaterThan(
++          pageTokens,
++        );
++        expect(servedTokens(content)).toBeLessThanOrEqual(INLINE_BLOCK_TOKENS);
++      } finally {
++        if (previousLocal === undefined) {
++          delete process.env['QWEN_CODE_MEMORY_LOCAL'];
++        } else {
++          process.env['QWEN_CODE_MEMORY_LOCAL'] = previousLocal;
++        }
++      }
 +    });
 +
 +    it('stops before a line the page cannot hold and resumes at it', async () => {
@@ -411039,7 +411110,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
      it('should handle image file and return appropriate content', async () => {
        const imagePath = path.join(tempRootDir, 'image.png');
        await sharp({
-@@ -553,42 +906,46 @@
+@@ -553,42 +976,46 @@
            channels: 3,
            background: '#306090',
          },
@@ -411091,7 +411162,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -599,340 +956,18 @@
+@@ -599,502 +1026,509 @@
            displayName: 'document.pdf',
          },
        });
@@ -411137,14 +411208,30 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        }) as ToolInvocation<ReadFileToolParams, ToolResult>;
 -        return invocation.execute(signalOverride);
 -      }
--
++    it('should handle binary file and skip content', async () => {
++      const binPath = path.join(tempRootDir, 'binary.bin');
++      // Binary data with null bytes
++      const binaryData = Buffer.from([0x00, 0xff, 0x00, 0xff]);
++      await fsp.writeFile(binPath, binaryData);
++      const params: ReadFileToolParams = { file_path: binPath, offset: 0 };
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
+ 
 -      function bridgeDisplay(result: ToolResult): VisionBridgeNoticeDisplay {
 -        expect(result.returnDisplay).toMatchObject({
 -          type: 'vision_bridge_notice',
 -        });
 -        return result.returnDisplay as VisionBridgeNoticeDisplay;
 -      }
--
++      const result = await invocation.execute(abortSignal);
++      expect(result.llmContent).toBe(
++        'Cannot display content of binary file: binary.bin',
++      );
++      expect(result.returnDisplay).toBe('Skipped binary file: binary.bin');
++    });
+ 
 -      beforeEach(() => {
 -        visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);
 -        pdfMocks.renderPDFPagesToImages.mockResolvedValue({
@@ -411156,7 +411243,16 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          bytesTruncated: false,
 -        });
 -      });
--
++    it('should handle SVG file as text', async () => {
++      const svgPath = path.join(tempRootDir, 'image.svg');
++      const svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
++      await fsp.writeFile(svgPath, svgContent, 'utf-8');
++      const params: ReadFileToolParams = { file_path: svgPath, offset: 0 };
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
+ 
 -      it('replaces candidate images with an untrusted transcription before returning', async () => {
 -        visionBridgeMocks.runVisionBridge.mockResolvedValue({
 -          applied: true,
@@ -411172,9 +411268,25 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          modelEndpoint: 'dashscope.aliyuncs.com',
 -          egressOccurred: true,
 -        });
--
++      const result = await invocation.execute(abortSignal);
++      expect(result.llmContent).toBe(svgContent);
++      expect(result.returnDisplay).toBe('Read SVG as text: image.svg');
++    });
+ 
 -        const result = await readCandidate();
--
++    it('reads a large SVG whole, for the one bound on a tool result to hold', async () => {
++      const svgPath = path.join(tempRootDir, 'large.svg');
++      // Larger than 1MB: no size of this tool's own refuses it. The result
++      // is held to one inline block where the model's copy is made, and the
++      // whole of it is retained there to be read back a page at a time.
++      const largeContent = '<svg>' + 'x'.repeat(1024 * 1024 + 1) + '</svg>';
++      await fsp.writeFile(svgPath, largeContent, 'utf-8');
++      const params: ReadFileToolParams = { file_path: svgPath, offset: 0 };
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
+ 
 -        expect(result.error).toBeUndefined();
 -        expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');
 -        expect(JSON.stringify(result.llmContent)).toContain(
@@ -411210,7 +411322,12 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        expect(sentParts).toHaveLength(4);
 -        expect(sentParts.every((part) => part.inlineData)).toBe(true);
 -      });
--
++      const result = await invocation.execute(abortSignal);
++      expect(result.error).toBeUndefined();
++      expect(result.llmContent).toBe(largeContent);
++      expect(result.returnDisplay).toBe('Read SVG as text: large.svg');
++    });
+ 
 -      it('does not present unknown continuation pages as certain', async () => {
 -        pdfMocks.getPDFPageCount.mockResolvedValue(null);
 -        visionBridgeMocks.runVisionBridge.mockResolvedValue({
@@ -411223,9 +411340,21 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          modelEndpoint: 'dashscope.aliyuncs.com',
 -          egressOccurred: true,
 -        });
--
++    it('should handle empty file', async () => {
++      const emptyPath = path.join(tempRootDir, 'empty.txt');
++      await fsp.writeFile(emptyPath, '', 'utf-8');
++      const params: ReadFileToolParams = { file_path: emptyPath, offset: 0 };
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
+ 
 -        const result = await readCandidate();
--
++      const result = await invocation.execute(abortSignal);
++      expect(result.llmContent).toBe('');
++      expect(result.returnDisplay).toBe('');
++    });
+ 
 -        const display = bridgeDisplay(result);
 -        expect(display.summary).toContain(
 -          'additional pages may exist from page 24 through page 25',
@@ -411243,7 +411372,27 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          }),
 -        );
 -      });
--
++    it('should handle Jupyter notebook file', async () => {
++      const nbPath = path.join(tempRootDir, 'test.ipynb');
++      const notebook = {
++        cells: [
++          {
++            cell_type: 'code',
++            source: ['print("hello")'],
++            execution_count: 1,
++            outputs: [{ output_type: 'stream', text: ['hello\n'] }],
++            metadata: {},
++          },
++        ],
++        metadata: { language_info: { name: 'python' } },
++      };
++      await fsp.writeFile(nbPath, JSON.stringify(notebook), 'utf-8');
++      const params: ReadFileToolParams = { file_path: nbPath, offset: 0 };
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
+ 
 -      it.each([
 -        ['request failure', 'the vision model request failed'],
 -        ['empty response', 'the vision model returned no description'],
@@ -411260,9 +411409,33 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          egressOccurred: true,
 -          error,
 -        });
--
++      const result = await invocation.execute(abortSignal);
++      expect(typeof result.llmContent).toBe('string');
++      expect(result.llmContent).toContain('Jupyter Notebook');
++      expect(result.llmContent).toContain('print("hello")');
++      expect(result.llmContent).toContain('hello');
++      expect(result.returnDisplay).toBe('Read notebook: test.ipynb');
++    });
+ 
 -        const result = await readCandidate();
--
++    it('records truncated notebook reads as not full', async () => {
++      const nbPath = path.join(tempRootDir, 'large.ipynb');
++      const notebook = {
++        cells: Array.from({ length: 200 }, (_, i) => ({
++          cell_type: 'code',
++          source: ['x = ' + 'a'.repeat(600) + '\n'],
++          execution_count: i + 1,
++          outputs: [{ output_type: 'stream', text: ['result '.repeat(100)] }],
++          metadata: {},
++        })),
++        metadata: { language_info: { name: 'python' } },
++      };
++      await fsp.writeFile(nbPath, JSON.stringify(notebook), 'utf-8');
++      const invocation = tool.build({
++        file_path: nbPath,
++        offset: 0,
++      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
+ 
 -        expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
 -        expect(result.error?.message).toBe('No extractable text layer.');
 -        expect(result.llmContent).toContain('Cannot extract text from PDF');
@@ -411274,7 +411447,11 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        );
 -        expect(display.notice).toContain('dashscope.aliyuncs.com');
 -      });
--
++      const result = await invocation.execute(abortSignal);
++      expect(typeof result.llmContent).toBe('string');
++      expect(result.llmContent).toContain('remaining cells truncated');
++      expect(result.llmContent).not.toContain('Showing lines');
+ 
 -      it('restores the PDF error for an unusable successful bridge result', async () => {
 -        visionBridgeMocks.runVisionBridge.mockResolvedValue({
 -          applied: false,
@@ -411285,16 +411462,46 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          modelEndpoint: 'dashscope.aliyuncs.com',
 -          egressOccurred: true,
 -        });
--
++      const status = fileReadCache.check(fs.statSync(nbPath));
++      expect(status.state).toBe('fresh');
++      if (status.state === 'fresh') {
++        expect(status.entry.lastReadWasFull).toBe(false);
++        expect(status.entry.lastReadCacheable).toBe(false);
++      }
++    });
+ 
 -        const result = await readCandidate();
--
++    it('[pages-contract] advertises exactly one range mechanism and no pages parameter', () => {
++      const schema = tool.schema.parametersJsonSchema as {
++        properties: Record<string, unknown>;
++      };
++      expect(Object.keys(schema.properties).sort()).toEqual([
++        'file_path',
++        'limit',
++        'offset',
++      ]);
++      expect(tool.schema.description).toContain('pdftotext -layout');
++    });
+ 
 -        expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
 -        expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');
 -        expect(bridgeDisplay(result).notice).toContain(
 -          'dashscope.aliyuncs.com',
 -        );
 -      });
--
++    it('[param-contract] requires offset so an omitted range cannot execute as line 1', () => {
++      // Omitting `offset` used to be a legal serialization of a wrong call:
++      // the read silently restarted from line 1 and nothing downstream could
++      // tell an intended full read from a dropped resume point. With `offset`
++      // in `required`, the decode-time grammar refuses the omission in-span
++      // and this schema check is the harness's fail-closed backstop for any
++      // call that reaches it another way.
++      const schema = tool.schema.parametersJsonSchema as {
++        required: string[];
++      };
++      expect(schema.required).toEqual(['file_path', 'offset']);
++      expect(tool.schema.description).toContain("'offset' is required");
+ 
 -      it.each([
 -        [
 -          'inlineData',
@@ -411335,7 +411542,11 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          expect(display.notice).not.toContain('vision model request failed');
 -        },
 -      );
--
++      expect(() =>
++        tool.build({ file_path: '/tmp/a.txt' } as ReadFileToolParams),
++      ).toThrow("params must have required property 'offset'");
++    });
+ 
 -      it('restores the PDF error when the bridge omits a rendered page', async () => {
 -        visionBridgeMocks.runVisionBridge.mockResolvedValue({
 -          applied: true,
@@ -411347,227 +411558,6 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -          modelEndpoint: 'dashscope.aliyuncs.com',
 -          egressOccurred: true,
 -        });
--
--        const result = await readCandidate();
--
--        expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
--        expect(result.llmContent).toContain('Cannot extract text from PDF');
--        expect(bridgeDisplay(result).notice).toContain(
--          'dashscope.aliyuncs.com',
--        );
--        expect(bridgeDisplay(result).notice).toContain(
--          'transcription was discarded',
--        );
--        expect(bridgeDisplay(result).notice).not.toContain(
--          'vision model request failed',
--        );
--        expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');
--      });
--
--      it('restores the PDF error when the bridge throws before replacement', async () => {
--        visionBridgeMocks.runVisionBridge.mockRejectedValue(
--          new Error('network failure'),
--        );
--
--        const result = await readCandidate();
--
--        expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
--        expect(result.error?.message).toBe('No extractable text layer.');
--        expect(result.llmContent).toContain('Cannot extract text from PDF');
--        expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');
--        expect(bridgeDisplay(result).notice).toContain(
--          'failed before producing a transcription',
--        );
--      });
--
--      it('propagates cancellation instead of restoring a PDF error', async () => {
--        const controller = new AbortController();
--        visionBridgeMocks.runVisionBridge.mockImplementation(async () => {
--          controller.abort();
--          return {
--            applied: false,
--            status: 'skipped',
--            convertedCount: 0,
--            omittedCount: 0,
--            modelId: 'qwen3-vl-plus',
--          };
--        });
--
--        await expect(readCandidate(controller.signal)).rejects.toThrow(
--          /abort/i,
--        );
--      });
--
--      it('preserves ordinary images for the shared tool-result bridge', async () => {
--        const imagePath = path.join(tempRootDir, 'image.png');
--        await fsp.writeFile(
--          imagePath,
--          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
--        );
--        const invocation = createTextOnlyTool().build({
--          file_path: imagePath,
--        }) as ToolInvocation<ReadFileToolParams, ToolResult>;
--
--        const result = await invocation.execute(abortSignal);
--
--        expect(result.llmContent).toMatchObject({
--          inlineData: {
--            mimeType: 'image/png',
--            displayName: 'image.png',
--          },
--        });
--        expect(visionBridgeMocks.runVisionBridge).not.toHaveBeenCalled();
--      });
--    });
--
-     it('should handle binary file and skip content', async () => {
-       const binPath = path.join(tempRootDir, 'binary.bin');
-       // Binary data with null bytes
-       const binaryData = Buffer.from([0x00, 0xff, 0x00, 0xff]);
-       await fsp.writeFile(binPath, binaryData);
--      const params: ReadFileToolParams = { file_path: binPath };
-+      const params: ReadFileToolParams = { file_path: binPath, offset: 0 };
-       const invocation = tool.build(params) as ToolInvocation<
-         ReadFileToolParams,
-         ToolResult
-       >;
- 
-       const result = await invocation.execute(abortSignal);
-@@ -943,47 +978,46 @@
-     });
- 
-     it('should handle SVG file as text', async () => {
-       const svgPath = path.join(tempRootDir, 'image.svg');
-       const svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
-       await fsp.writeFile(svgPath, svgContent, 'utf-8');
--      const params: ReadFileToolParams = { file_path: svgPath };
-+      const params: ReadFileToolParams = { file_path: svgPath, offset: 0 };
-       const invocation = tool.build(params) as ToolInvocation<
-         ReadFileToolParams,
-         ToolResult
-       >;
- 
-       const result = await invocation.execute(abortSignal);
-       expect(result.llmContent).toBe(svgContent);
-       expect(result.returnDisplay).toBe('Read SVG as text: image.svg');
-     });
- 
--    it('should handle large SVG file', async () => {
-+    it('reads a large SVG whole, for the one bound on a tool result to hold', async () => {
-       const svgPath = path.join(tempRootDir, 'large.svg');
--      // Create SVG content larger than 1MB
-+      // Larger than 1MB: no size of this tool's own refuses it. The result
-+      // is held to one inline block where the model's copy is made, and the
-+      // whole of it is retained there to be read back a page at a time.
-       const largeContent = '<svg>' + 'x'.repeat(1024 * 1024 + 1) + '</svg>';
-       await fsp.writeFile(svgPath, largeContent, 'utf-8');
--      const params: ReadFileToolParams = { file_path: svgPath };
-+      const params: ReadFileToolParams = { file_path: svgPath, offset: 0 };
-       const invocation = tool.build(params) as ToolInvocation<
-         ReadFileToolParams,
-         ToolResult
-       >;
- 
-       const result = await invocation.execute(abortSignal);
--      expect(result.llmContent).toBe(
--        'Cannot display content of SVG file larger than 1MB: large.svg',
--      );
--      expect(result.returnDisplay).toBe(
--        'Skipped large SVG file (>1MB): large.svg',
--      );
-+      expect(result.error).toBeUndefined();
-+      expect(result.llmContent).toBe(largeContent);
-+      expect(result.returnDisplay).toBe('Read SVG as text: large.svg');
-     });
- 
-     it('should handle empty file', async () => {
-       const emptyPath = path.join(tempRootDir, 'empty.txt');
-       await fsp.writeFile(emptyPath, '', 'utf-8');
--      const params: ReadFileToolParams = { file_path: emptyPath };
-+      const params: ReadFileToolParams = { file_path: emptyPath, offset: 0 };
-       const invocation = tool.build(params) as ToolInvocation<
-         ReadFileToolParams,
-         ToolResult
-       >;
- 
-       const result = await invocation.execute(abortSignal);
-@@ -1003,13 +1037,13 @@
-             metadata: {},
-           },
-         ],
-         metadata: { language_info: { name: 'python' } },
-       };
-       await fsp.writeFile(nbPath, JSON.stringify(notebook), 'utf-8');
--      const params: ReadFileToolParams = { file_path: nbPath };
-+      const params: ReadFileToolParams = { file_path: nbPath, offset: 0 };
-       const invocation = tool.build(params) as ToolInvocation<
-         ReadFileToolParams,
-         ToolResult
-       >;
- 
-       const result = await invocation.execute(abortSignal);
-@@ -1032,12 +1066,13 @@
-         })),
-         metadata: { language_info: { name: 'python' } },
-       };
-       await fsp.writeFile(nbPath, JSON.stringify(notebook), 'utf-8');
-       const invocation = tool.build({
-         file_path: nbPath,
-+        offset: 0,
-       }) as ToolInvocation<ReadFileToolParams, ToolResult>;
- 
-       const result = await invocation.execute(abortSignal);
-       expect(typeof result.llmContent).toBe('string');
-       expect(result.llmContent).toContain('remaining cells truncated');
-       expect(result.llmContent).not.toContain('Showing lines');
-@@ -1047,54 +1082,383 @@
-       if (status.state === 'fresh') {
-         expect(status.entry.lastReadWasFull).toBe(false);
-         expect(status.entry.lastReadCacheable).toBe(false);
-       }
-     });
- 
--    it('should reject invalid pages parameter', () => {
--      const params: ReadFileToolParams = {
--        file_path: '/tmp/test.pdf',
--        pages: 'abc',
-+    it('[pages-contract] advertises exactly one range mechanism and no pages parameter', () => {
-+      const schema = tool.schema.parametersJsonSchema as {
-+        properties: Record<string, unknown>;
-       };
--      expect(() => tool.build(params)).toThrow('Invalid pages parameter');
-+      expect(Object.keys(schema.properties).sort()).toEqual([
-+        'file_path',
-+        'limit',
-+        'offset',
-+      ]);
-+      expect(tool.schema.description).toContain('pdftotext -layout');
-     });
- 
--    it('should reject pages range exceeding 20', () => {
--      const params: ReadFileToolParams = {
--        file_path: '/tmp/test.pdf',
--        pages: '1-25',
-+    it('[param-contract] requires offset so an omitted range cannot execute as line 1', () => {
-+      // Omitting `offset` used to be a legal serialization of a wrong call:
-+      // the read silently restarted from line 1 and nothing downstream could
-+      // tell an intended full read from a dropped resume point. With `offset`
-+      // in `required`, the decode-time grammar refuses the omission in-span
-+      // and this schema check is the harness's fail-closed backstop for any
-+      // call that reaches it another way.
-+      const schema = tool.schema.parametersJsonSchema as {
-+        required: string[];
-       };
--      expect(() => tool.build(params)).toThrow(
--        'Pages range exceeds maximum of 20',
-+      expect(schema.required).toEqual(['file_path', 'offset']);
-+      expect(tool.schema.description).toContain("'offset' is required");
-+
-+      expect(() =>
-+        tool.build({ file_path: '/tmp/a.txt' } as ReadFileToolParams),
-+      ).toThrow("params must have required property 'offset'");
-+    });
-+
 +    it('[param-contract] offset 0 is the whole-file read and negatives stay refused', async () => {
 +      const filePath = path.join(tempRootDir, 'zero-offset.txt');
 +      await fsp.writeFile(filePath, 'alpha\nbeta\n', 'utf-8');
@@ -411578,16 +411568,20 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      const result = await whole.execute(abortSignal);
 +      expect(result.error).toBeUndefined();
 +      expect(result.llmContent).toContain('alpha');
-+
+ 
+-        const result = await readCandidate();
 +      expect(() => tool.build({ file_path: filePath, offset: -1 })).toThrow(
 +        'Offset must be a non-negative integer',
-       );
-     });
++      );
++    });
  
--    it('should reject open-ended pages range', () => {
--      const params: ReadFileToolParams = {
--        file_path: '/tmp/test.pdf',
--        pages: '3-',
+-        expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
+-        expect(result.llmContent).toContain('Cannot extract text from PDF');
+-        expect(bridgeDisplay(result).notice).toContain(
+-          'dashscope.aliyuncs.com',
+-        );
+-        expect(bridgeDisplay(result).notice).toContain(
+-          'transcription was discarded',
 +    it.each([
 +      ['a non-PDF source file', '/tmp/Example.java', '600-721'],
 +      ['a PDF', '/tmp/test.pdf', '1-2'],
@@ -411606,26 +411600,34 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        } as ReadFileToolParams;
 +        expect(() => tool.build(params)).toThrow(
 +          "read_file has no parameter 'pages'",
-+        );
+         );
+-        expect(bridgeDisplay(result).notice).not.toContain(
+-          'vision model request failed',
 +        // The refusal names the complete accepted set, so the correction is
 +        // available without a second failed call.
 +        expect(() => tool.build(params)).toThrow(
 +          "It accepts exactly: 'file_path', 'offset', 'limit'.",
-+        );
+         );
+-        expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');
+-      });
 +      },
 +    );
-+
+ 
+-      it('restores the PDF error when the bridge throws before replacement', async () => {
+-        visionBridgeMocks.runVisionBridge.mockRejectedValue(
+-          new Error('network failure'),
+-        );
 +    it('[param-contract] declares its schema closed', () => {
 +      const schema = tool.schema.parametersJsonSchema as {
 +        additionalProperties?: unknown;
-       };
--      expect(() => tool.build(params)).toThrow('Open-ended page ranges');
++      };
 +      // The schema is re-rendered into every request, so it is where "no
 +      // other parameters exist" has to be said. The validator only enforces
 +      // what the schema already declares.
 +      expect(schema.additionalProperties).toBe(false);
 +    });
-+
+ 
+-        const result = await readCandidate();
 +    it.each([
 +      ['a misremembered name', 'file_paths'],
 +      ['an invented range', 'line_range'],
@@ -411639,21 +411641,44 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(() => tool.build(params)).toThrow(
 +        `read_file has no parameter '${key}'`,
 +      );
-     });
++    });
  
--    it('should accept valid pages parameter', () => {
+-        expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
+-        expect(result.error?.message).toBe('No extractable text layer.');
+-        expect(result.llmContent).toContain('Cannot extract text from PDF');
+-        expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');
+-        expect(bridgeDisplay(result).notice).toContain(
+-          'failed before producing a transcription',
+-        );
+-      });
 +    it('[param-contract] a truncated read carries the exact call that continues it', async () => {
 +      const filePath = path.join(tempRootDir, 'continuation.txt');
 +      const lines = Array.from({ length: 40 }, (_, i) => `Line ${i + 1}`);
 +      await fsp.writeFile(filePath, lines.join('\n'), 'utf-8');
-+
+ 
+-      it('propagates cancellation instead of restoring a PDF error', async () => {
+-        const controller = new AbortController();
+-        visionBridgeMocks.runVisionBridge.mockImplementation(async () => {
+-          controller.abort();
+-          return {
+-            applied: false,
+-            status: 'skipped',
+-            convertedCount: 0,
+-            omittedCount: 0,
+-            modelId: 'qwen3-vl-plus',
+-          };
+-        });
 +      const invocation = tool.build({
 +        file_path: filePath,
 +        offset: 0,
 +        limit: 10,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
 +      const result = await invocation.execute(abortSignal);
-+
+ 
+-        await expect(readCandidate(controller.signal)).rejects.toThrow(
+-          /abort/i,
+-        );
+-      });
 +      // Naming 'offset' and 'limit' leaves the caller to derive the resume
 +      // line from a 1-based display range. The values are known here, so the
 +      // notice carries them.
@@ -411663,7 +411688,16 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        )}, offset: 10, limit: 10`,
 +      );
 +    });
-+
+ 
+-      it('preserves ordinary images for the shared tool-result bridge', async () => {
+-        const imagePath = path.join(tempRootDir, 'image.png');
+-        await fsp.writeFile(
+-          imagePath,
+-          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+-        );
+-        const invocation = createTextOnlyTool().build({
+-          file_path: imagePath,
+-        }) as ToolInvocation<ReadFileToolParams, ToolResult>;
 +    it('[param-contract] a complete read carries no continuation', async () => {
 +      const filePath = path.join(tempRootDir, 'whole.txt');
 +      await fsp.writeFile(filePath, 'only line\n', 'utf-8');
@@ -411674,22 +411708,24 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      const result = await invocation.execute(abortSignal);
 +      expect(String(result.llmContent)).not.toContain('To continue');
 +    });
-+
-+    it('[pages-contract] reads a PDF whole, with no page parameter to supply', () => {
-       const params: ReadFileToolParams = {
-         file_path: path.join(tempRootDir, 'test.pdf'),
--        pages: '1-5',
-+        offset: 0,
-       };
-       expect(() => tool.build(params)).not.toThrow();
-     });
  
--    it('should treat empty pages parameter as unset', () => {
--      const params: ReadFileToolParams = {
--        file_path: path.join(tempRootDir, 'test.txt'),
--        pages: '',
--      };
--      const invocation = tool.build(params);
+-        const result = await invocation.execute(abortSignal);
++    it('[pages-contract] reads a PDF whole, with no page parameter to supply', () => {
++      const params: ReadFileToolParams = {
++        file_path: path.join(tempRootDir, 'test.pdf'),
++        offset: 0,
++      };
++      expect(() => tool.build(params)).not.toThrow();
++    });
+ 
+-        expect(result.llmContent).toMatchObject({
+-          inlineData: {
+-            mimeType: 'image/png',
+-            displayName: 'image.png',
+-          },
+-        });
+-        expect(visionBridgeMocks.runVisionBridge).not.toHaveBeenCalled();
+-      });
 +    it('shows the range and the true line count, and calls nothing cut that met its limit', async () => {
 +      const filePath = path.join(tempRootDir, 'trailing-newline.txt');
 +      // 20 lines, newline-terminated: splitting on "\n" yields 21 segments.
@@ -411704,8 +411740,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        offset: 5,
 +        limit: 3,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
- 
--      expect(invocation.params.pages).toBeUndefined();
++
 +      const result = await invocation.execute(abortSignal);
 +
 +      expect(result.llmContent).toContain(
@@ -411714,8 +411749,18 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(result.llmContent).not.toContain('of 21 total lines');
 +      // The caller's own limit was met: nothing was cut, and nothing says so.
 +      expect(result.llmContent).not.toContain('cut');
-+    });
-+
+     });
+ 
+-    it('should handle binary file and skip content', async () => {
+-      const binPath = path.join(tempRootDir, 'binary.bin');
+-      // Binary data with null bytes
+-      const binaryData = Buffer.from([0x00, 0xff, 0x00, 0xff]);
+-      await fsp.writeFile(binPath, binaryData);
+-      const params: ReadFileToolParams = { file_path: binPath };
+-      const invocation = tool.build(params) as ToolInvocation<
+-        ReadFileToolParams,
+-        ToolResult
+-      >;
 +    it('says a page the file continues past continues, and how many lines remain', async () => {
 +      const filePath = path.join(tempRootDir, 'first-page.txt');
 +      await fsp.writeFile(
@@ -411728,19 +411773,30 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        offset: 0,
 +        limit: 3,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
-+      const result = await invocation.execute(abortSignal);
+ 
+       const result = await invocation.execute(abortSignal);
 +
 +      // The pair of the last page's sentence: where the page ends, that the
 +      // file goes on past it, and how much of it is still unread -- said,
 +      // not left to be derived from a next call's presence.
-+      expect(result.llmContent).toBe(
+       expect(result.llmContent).toBe(
+-        'Cannot display content of binary file: binary.bin',
 +        `Showing lines 1-3 of 20 total lines. The file continues past line 3: 17 lines remain. Continue with: read_file with file_path: ${JSON.stringify(
 +          filePath,
 +        )}, offset: 3, limit: 3\n\n---\n\nLine 1\nLine 2\nLine 3\n`,
-+      );
-+    });
-+
+       );
+-      expect(result.returnDisplay).toBe('Skipped binary file: binary.bin');
+     });
+ 
+-    it('should handle SVG file as text', async () => {
+-      const svgPath = path.join(tempRootDir, 'image.svg');
+-      const svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
+-      await fsp.writeFile(svgPath, svgContent, 'utf-8');
+-      const params: ReadFileToolParams = { file_path: svgPath };
+-      const invocation = tool.build(params) as ToolInvocation<
+-        ReadFileToolParams,
+-        ToolResult
+-      >;
 +    it('describes the page statement in the words the statement uses', async () => {
 +      // The description quotes the statement with placeholders; filled in,
 +      // the quotations are what a page of the file actually starts with.
@@ -411795,15 +411851,27 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        offset: 6,
 +        limit: 4,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
-+      const result = await invocation.execute(abortSignal);
+ 
+       const result = await invocation.execute(abortSignal);
+-      expect(result.llmContent).toBe(svgContent);
+-      expect(result.returnDisplay).toBe('Read SVG as text: image.svg');
 +
 +      expect(result.llmContent).toContain(
 +        'The file continues past line 10: 10 lines remain.',
 +      );
 +      expect(result.llmContent).toContain('offset: 10, limit: 4');
-+    });
-+
+     });
+ 
+-    it('should handle large SVG file', async () => {
+-      const svgPath = path.join(tempRootDir, 'large.svg');
+-      // Create SVG content larger than 1MB
+-      const largeContent = '<svg>' + 'x'.repeat(1024 * 1024 + 1) + '</svg>';
+-      await fsp.writeFile(svgPath, largeContent, 'utf-8');
+-      const params: ReadFileToolParams = { file_path: svgPath };
+-      const invocation = tool.build(params) as ToolInvocation<
+-        ReadFileToolParams,
+-        ToolResult
+-      >;
 +    it('says the last page of a file read in pages is its end, counting its lines, not its final newline', async () => {
 +      const filePath = path.join(tempRootDir, 'last-page.txt');
 +      // 20 lines, newline-terminated, read from line 18 to the end. Splitting
@@ -411817,19 +411885,29 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        file_path: filePath,
 +        offset: 17,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
-+      const result = await invocation.execute(abortSignal);
+ 
+       const result = await invocation.execute(abortSignal);
 +
 +      // Nothing cut this page, so it names no bound; it says where it stands
 +      // and that the file ends with it, then holds the rest of the file.
-+      expect(result.llmContent).toBe(
+       expect(result.llmContent).toBe(
+-        'Cannot display content of SVG file larger than 1MB: large.svg',
 +        'Showing lines 18-20 of 20 total lines. The file ends here.\n\n---\n\nLine 18\nLine 19\nLine 20\n',
-+      );
-+      expect(result.returnDisplay).toBe(
+       );
+       expect(result.returnDisplay).toBe(
+-        'Skipped large SVG file (>1MB): large.svg',
 +        'Read lines 18-20 of 20 from last-page.txt',
-+      );
-+    });
-+
+       );
+     });
+ 
+-    it('should handle empty file', async () => {
+-      const emptyPath = path.join(tempRootDir, 'empty.txt');
+-      await fsp.writeFile(emptyPath, '', 'utf-8');
+-      const params: ReadFileToolParams = { file_path: emptyPath };
+-      const invocation = tool.build(params) as ToolInvocation<
+-        ReadFileToolParams,
+-        ToolResult
+-      >;
 +    it('says a page whose limit lands on the last line ends the file, and offers no continuation', async () => {
 +      const filePath = path.join(tempRootDir, 'limit-at-end.txt');
 +      // 20 lines, newline-terminated: splitting on "\n" yields a 21st, empty
@@ -411849,7 +411927,10 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(last.llmContent).toBe(
 +        'Showing lines 18-20 of 20 total lines. The file ends here.\n\n---\n\nLine 18\nLine 19\nLine 20\n',
 +      );
-+
+ 
+-      const result = await invocation.execute(abortSignal);
+-      expect(result.llmContent).toBe('');
+-      expect(result.returnDisplay).toBe('');
 +      // A limit that lands on the last line from the start holds the whole
 +      // file, and says nothing about a page.
 +      const whole = await (
@@ -411863,8 +411944,28 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        `${Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n')}\n`,
 +      );
 +      expect(whole.returnDisplay).toBe('');
-+    });
-+
+     });
+ 
+-    it('should handle Jupyter notebook file', async () => {
+-      const nbPath = path.join(tempRootDir, 'test.ipynb');
+-      const notebook = {
+-        cells: [
+-          {
+-            cell_type: 'code',
+-            source: ['print("hello")'],
+-            execution_count: 1,
+-            outputs: [{ output_type: 'stream', text: ['hello\n'] }],
+-            metadata: {},
+-          },
+-        ],
+-        metadata: { language_info: { name: 'python' } },
+-      };
+-      await fsp.writeFile(nbPath, JSON.stringify(notebook), 'utf-8');
+-      const params: ReadFileToolParams = { file_path: nbPath };
+-      const invocation = tool.build(params) as ToolInvocation<
+-        ReadFileToolParams,
+-        ToolResult
+-      >;
 +    it('says the last page is the end of a file with no final newline, too', async () => {
 +      const filePath = path.join(tempRootDir, 'last-page-bare.txt');
 +      await fsp.writeFile(
@@ -411876,14 +411977,32 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        file_path: filePath,
 +        offset: 18,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
-+      const result = await invocation.execute(abortSignal);
+ 
+       const result = await invocation.execute(abortSignal);
+-      expect(typeof result.llmContent).toBe('string');
+-      expect(result.llmContent).toContain('Jupyter Notebook');
+-      expect(result.llmContent).toContain('print("hello")');
+-      expect(result.llmContent).toContain('hello');
+-      expect(result.returnDisplay).toBe('Read notebook: test.ipynb');
 +
 +      expect(result.llmContent).toBe(
 +        'Showing lines 19-20 of 20 total lines. The file ends here.\n\n---\n\nLine 19\nLine 20',
 +      );
-+    });
-+
+     });
+ 
+-    it('records truncated notebook reads as not full', async () => {
+-      const nbPath = path.join(tempRootDir, 'large.ipynb');
+-      const notebook = {
+-        cells: Array.from({ length: 200 }, (_, i) => ({
+-          cell_type: 'code',
+-          source: ['x = ' + 'a'.repeat(600) + '\n'],
+-          execution_count: i + 1,
+-          outputs: [{ output_type: 'stream', text: ['result '.repeat(100)] }],
+-          metadata: {},
+-        })),
+-        metadata: { language_info: { name: 'python' } },
+-      };
+-      await fsp.writeFile(nbPath, JSON.stringify(notebook), 'utf-8');
 +    it('says a read that starts past the end of a file has no lines, and where the file ends', async () => {
 +      const filePath = path.join(tempRootDir, 'past-end.txt');
 +      await fsp.writeFile(
@@ -411891,18 +412010,60 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        `${Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n')}\n`,
 +        'utf-8',
 +      );
-+      const invocation = tool.build({
+       const invocation = tool.build({
+-        file_path: nbPath,
 +        file_path: filePath,
 +        offset: 25,
-+      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
-+      const result = await invocation.execute(abortSignal);
-+
+       }) as ToolInvocation<ReadFileToolParams, ToolResult>;
+ 
+       const result = await invocation.execute(abortSignal);
+-      expect(typeof result.llmContent).toBe('string');
+-      expect(result.llmContent).toContain('remaining cells truncated');
+-      expect(result.llmContent).not.toContain('Showing lines');
+ 
+-      const status = fileReadCache.check(fs.statSync(nbPath));
+-      expect(status.state).toBe('fresh');
+-      if (status.state === 'fresh') {
+-        expect(status.entry.lastReadWasFull).toBe(false);
+-        expect(status.entry.lastReadCacheable).toBe(false);
+-      }
+-    });
+-
+-    it('should reject invalid pages parameter', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: 'abc',
+-      };
+-      expect(() => tool.build(params)).toThrow('Invalid pages parameter');
+-    });
+-
+-    it('should reject pages range exceeding 20', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: '1-25',
+-      };
+-      expect(() => tool.build(params)).toThrow(
+-        'Pages range exceeds maximum of 20',
 +      expect(result.llmContent).toBe(
 +        'Showing no lines: the file has 20 total lines and ends before line 26.\n\n---\n\n',
-+      );
-+    });
-+
+       );
+     });
+ 
+-    it('should reject open-ended pages range', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: '3-',
+-      };
+-      expect(() => tool.build(params)).toThrow('Open-ended page ranges');
+-    });
+-
+-    it('should accept valid pages parameter', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: path.join(tempRootDir, 'test.pdf'),
+-        pages: '1-5',
+-      };
+-      expect(() => tool.build(params)).not.toThrow();
+-    });
 +    it('counts the lines of a page by the page, never the empty segment after a final newline', async () => {
 +      const filePath = path.join(tempRootDir, 'limited-last.txt');
 +      await fsp.writeFile(
@@ -411916,9 +412077,16 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        offset: 16,
 +        limit: 3,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
+ 
+-    it('should treat empty pages parameter as unset', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: path.join(tempRootDir, 'test.txt'),
+-        pages: '',
+-      };
+-      const invocation = tool.build(params);
 +      const result = await invocation.execute(abortSignal);
-+
+ 
+-      expect(invocation.params.pages).toBeUndefined();
 +      expect(result.llmContent).toContain(
 +        'Showing lines 17-19 of 20 total lines. The file continues past line 19: 1 line remains.',
 +      );
@@ -411929,7 +412097,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
        const fileContent = lines.join('\n');
-@@ -1109,13 +1473,13 @@
+@@ -1109,13 +1543,13 @@
          ReadFileToolParams,
          ToolResult
        >;
@@ -411944,7 +412112,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(result.llmContent).toContain('Line 8');
        expect(result.returnDisplay).toBe(
          'Read lines 6-8 of 20 from paginated.txt',
-@@ -1126,33 +1490,35 @@
+@@ -1126,33 +1560,35 @@
        const tempDir = path.join(tempRootDir, '.temp');
        await fsp.mkdir(tempDir, { recursive: true });
        const tempFilePath = path.join(tempDir, 'temp-output.txt');
@@ -411985,7 +412153,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          >;
  
          const result = await invocation.execute(abortSignal);
-@@ -1187,126 +1553,133 @@
+@@ -1187,126 +1623,133 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -412142,7 +412310,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            offset: 1,
            limit: 2,
          });
-@@ -1318,56 +1691,55 @@
+@@ -1318,56 +1761,55 @@
        it('does not arm the placeholder if the first Read was truncated', async () => {
          // Truncation means the model has not seen the full file even
          // though no offset/limit was passed. A follow-up no-args Read
@@ -412212,7 +412380,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('records an auto-memory read in the cache so a follow-up Edit can pass enforcement', async () => {
          // Auto-memory files skip the file_unchanged fast-path (they
-@@ -1386,13 +1758,13 @@
+@@ -1386,13 +1828,13 @@
            clearAutoMemoryRootCache();
            const memRoot = getAutoMemoryRoot(tempRootDir);
            await fsp.mkdir(memRoot, { recursive: true });
@@ -412227,7 +412395,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            // The cache must contain the auto-memory file's entry, AND
            // the entry must be in a shape that satisfies prior-read
            // enforcement on Edit / WriteFile (fresh + lastReadAt set +
-@@ -1428,13 +1800,13 @@
+@@ -1428,13 +1870,13 @@
          await fsp.writeFile(
            svgPath,
            '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
@@ -412242,7 +412410,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          // The cache must record this as a full, cacheable read so
          // that prior-read enforcement on Edit / WriteFile would
          // recognise it as the model having seen the bytes.
-@@ -1485,21 +1857,21 @@
+@@ -1485,21 +1927,21 @@
          // `read_file(file_path)` without offset/limit but on a file
          // larger than the truncate-tool-output limit. Pre-fix the
          // truncated content collapsed `cacheable` to false; post-fix
@@ -412269,7 +412437,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          if (status.state === 'fresh') {
            // Truncated → model has not seen every byte.
            expect(status.entry.lastReadWasFull).toBe(false);
-@@ -1527,13 +1899,13 @@
+@@ -1527,13 +1969,13 @@
          // content to a `.cpp` file. The test relies on the
          // extension override winning over any future content-side
          // heuristic — there is no isBinaryFile mocking in scope.
@@ -412284,7 +412452,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          const status = fileReadCache.check(fs.statSync(filePath));
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
-@@ -1551,17 +1923,17 @@
+@@ -1551,17 +1993,17 @@
              background: '#306090',
            },
          })
@@ -412304,7 +412472,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('completely bypasses the cache when getFileReadCacheDisabled() is true', async () => {
          // Build a fresh ReadFileTool with a Config whose cache is
-@@ -1579,27 +1951,33 @@
+@@ -1579,27 +2021,33 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -412342,7 +412510,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(second.llmContent).not.toMatch(/unchanged since/);
          expect(isolatedCache.size()).toBe(0);
        });
-@@ -1615,12 +1993,13 @@
+@@ -1615,12 +2063,13 @@
  
        it('should throw error if path is ignored by a .qwenignore pattern', async () => {
          const ignoredFilePath = path.join(tempRootDir, 'foo.bar');
@@ -412356,7 +412524,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('should throw error if path is ignored by .agentignore or .aiignore', async () => {
-@@ -1634,18 +2013,18 @@
+@@ -1634,18 +2083,18 @@
          );
          const agentIgnoredFilePath = path.join(tempRootDir, 'agent-secret.txt');
          const aiIgnoredFilePath = path.join(tempRootDir, 'ai-secret.txt');
@@ -412381,7 +412549,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          await fsp.writeFile(
            path.join(tempRootDir, '.cursorignore'),
            'cursor-secret.txt\n',
-@@ -1660,47 +2039,297 @@
+@@ -1660,47 +2109,297 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -412687,7 +412855,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
 --- a/packages/core/src/tools/read-file.ts
 +++ b/packages/core/src/tools/read-file.ts
-@@ -6,51 +6,232 @@
+@@ -6,51 +6,233 @@
  
  import path from 'node:path';
  import fs from 'node:fs/promises';
@@ -412877,17 +413045,20 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 + * The room one inline block leaves for a page of `filePath`: the block less
 + * the widest statement that can lead a page of it -- that the file continues,
 + * counted or still being counted, with the call that reads on, or that it
-+ * ends -- and, for a memory file, the widest staleness note that leads it,
-+ * each counted by the served tokenizer. Every number in them takes the most
-+ * digits a number here can have, and the call carries the caller's own
-+ * `limit`. The page and what leads it are then counted together where the
-+ * read composes them, so this is where a page starts, not what it is held to.
++ * ends -- and less `note`, the staleness note the read leads a memory file's
++ * page with ('' for any other file and for a memory a day old or less), each
++ * counted by the served tokenizer. Every number in a statement takes the most
++ * digits a number here can have, since the page it leads is not yet read, and
++ * the call carries the caller's own `limit`; the note is the very text the
++ * read composes, since the file's age is known before its page is. The page
++ * and what leads it are then counted together where the read composes them,
++ * so this is where a page starts, not what it is held to.
 + */
 +export async function readPageTokens(
 +  maxTokens: number,
 +  filePath: string,
 +  limit: number | undefined,
-+  isAutoMem: boolean,
++  note: string,
 +  count: (text: string) => Promise<number>,
 +): Promise<number> {
 +  const most = Number.MAX_SAFE_INTEGER;
@@ -412914,10 +413085,8 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +      await count(tokenizerText(statement).text),
 +    );
 +  }
-+  const widestNote = isAutoMem
-+    ? await count(tokenizerText(memoryFreshnessNote(-most)).text)
-+    : 0;
-+  return maxTokens - widestStatement - widestNote;
++  const noteTokens = note ? await count(tokenizerText(note).text) : 0;
++  return maxTokens - widestStatement - noteTokens;
 +}
  import { createDebugLogger } from '../utils/debugLogger.js';
  import { getFileReadDefaultPermission } from './file-read-permission.js';
@@ -412939,7 +413108,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  /**
   * Parameters for the ReadFile tool
   */
-@@ -58,31 +239,25 @@
+@@ -58,31 +240,25 @@
    /**
     * The absolute path to the file to read
     */
@@ -412974,7 +413143,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      params: ReadFileToolParams,
    ) {
      super(params);
-@@ -92,23 +267,17 @@
+@@ -92,23 +268,17 @@
      const relativePath = makeRelative(
        this.params.file_path,
        this.config.getTargetDir(),
@@ -413000,7 +413169,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    override toolLocations(): ToolLocation[] {
-@@ -122,13 +291,13 @@
+@@ -122,13 +292,13 @@
    override getDefaultPermission(): Promise<PermissionDecision> {
      return Promise.resolve(
        getFileReadDefaultPermission(this.config, this.params.file_path),
@@ -413015,7 +413184,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      // root) get a per-read freshness `<system-reminder>` prepended in
      // the slow path — the signal that tells the model to treat the
      // contents as a point-in-time snapshot. Returning the
-@@ -148,19 +317,17 @@
+@@ -148,19 +318,17 @@
      // never serve the file_unchanged placeholder — those files own a
      // per-read freshness `<system-reminder>` that must be re-emitted
      // on every read.
@@ -413039,7 +413208,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      // here is microseconds. If stat fails we fall through to the normal
      // pipeline so its error handling stays the single source of truth.
      let stats: Stats | undefined;
-@@ -178,308 +345,250 @@
+@@ -178,308 +346,254 @@
        if (
          status.state === 'fresh' &&
          status.entry.lastReadAt !== undefined &&
@@ -413060,11 +413229,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  
 -    const prepareForVisionBridge = shouldRunVisionBridge(this.config);
 -    let result = await processSingleFileContent(
-+    const maxTokens = this.config.getInlineBlockTokens();
-+    const count = (text: string) => this.config.countInlineTokens(text, signal);
-+    let pageTokens = await readPageTokens(
-+      maxTokens,
-       this.params.file_path,
+-      this.params.file_path,
 -      this.config,
 -      {
 -        offset: this.params.offset,
@@ -413074,10 +413239,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -        preparePdfForVisionBridge: prepareForVisionBridge,
 -        signal,
 -      },
-+      this.params.limit,
-+      isAutoMem,
-+      count,
-     );
+-    );
 -
 -    if (result.pdfVisionBridgeCandidate) {
 -      result = await this.transcribePdfCandidate(result, signal);
@@ -413090,21 +413252,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -        error: {
 -          message: result.error,
 -          type: result.errorType,
-+    // A page and what leads it are counted together once composed; a page
-+    // that comes to more than one block with them is read again with that
-+    // much less room, so what is handed on is always the count of what is
-+    // handed on.
-+    for (;;) {
-+      const result = await processSingleFileContent(
-+        this.params.file_path,
-+        this.config,
-+        {
-+          offset: this.params.offset,
-+          limit: this.params.limit,
-+          signal,
-+          pageTokens: { max: pageTokens, count },
-+          shownPath: shownFilePath,
-         },
+-        },
 -      };
 -    }
 -
@@ -413178,39 +413326,32 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -    } else {
 -      llmContent = result.llmContent || '';
 -    }
-+      );
- 
+-
 -    // For memory files, prepend a per-file staleness caveat so the model knows
 -    // the content is a point-in-time snapshot and may be stale.
 -    if (typeof llmContent === 'string' && isAutoMem) {
--      // Reuse the stat from above when we have it; only re-stat as a
--      // fallback so memory-file behavior survives a stat failure earlier
--      // (which would leave `stats` undefined).
--      try {
--        const memStat = stats ?? (await fs.stat(absPath));
++    // For memory files, a per-file staleness caveat leads the content so the
++    // model knows it is a point-in-time snapshot and may be stale. It is
++    // decided once, before the page, so a page's room is the block less the
++    // very note that leads it.
++    let note = '';
++    if (isAutoMem) {
+       // Reuse the stat from above when we have it; only re-stat as a
+       // fallback so memory-file behavior survives a stat failure earlier
+       // (which would leave `stats` undefined).
+       try {
+         const memStat = stats ?? (await fs.stat(absPath));
 -        const note = memoryFreshnessNote(memStat.mtimeMs);
 -        if (note) {
 -          llmContent = note + llmContent;
 -        }
--      } catch {
--        // Best-effort — if stat fails, omit the note silently.
-+      if (result.error) {
-+        // A failed read's texts are strings. A branch this deployment never
-+        // takes states no authors for them; its result states none (null) and
-+        // is refused if it is ever carried.
-+        return {
-+          llmContent: String(result.llmContent),
-+          llmContentAuthors: result.llmContentAuthors ?? null,
-+          returnDisplay: result.returnDisplay || 'Error reading file',
-+          error: {
-+            message: result.error,
-+            type: result.errorType,
-+            messageAuthors: result.errorAuthors ?? null,
-+          },
-+        };
++        // The note, and the age it states, are the client's.
++        note = memoryFreshnessNote(memStat.mtimeMs);
+       } catch {
+         // Best-effort — if stat fails, omit the note silently.
        }
--    }
- 
+     }
+-
 -    const lines =
 -      typeof result.llmContent === 'string'
 -        ? result.llmContent.split('\n').length
@@ -413229,8 +413370,32 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -        path.extname(this.params.file_path),
 -        programming_language,
 -      ),
--    );
--
++    const maxTokens = this.config.getInlineBlockTokens();
++    const count = (text: string) => this.config.countInlineTokens(text, signal);
++    let pageTokens = await readPageTokens(
++      maxTokens,
++      this.params.file_path,
++      this.params.limit,
++      note,
++      count,
+     );
++    // A page and what leads it are counted together once composed; a page
++    // that comes to more than one block with them is read again with that
++    // much less room, so what is handed on is always the count of what is
++    // handed on.
++    for (;;) {
++      const result = await processSingleFileContent(
++        this.params.file_path,
++        this.config,
++        {
++          offset: this.params.offset,
++          limit: this.params.limit,
++          signal,
++          pageTokens: { max: pageTokens, count },
++          shownPath: shownFilePath,
++        },
++      );
+ 
 -    return {
 -      llmContent,
 -      returnDisplay: this.toToolResultDisplay(result),
@@ -413249,7 +413414,22 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -      debugLogger.debug('pdf vision bridge candidate contained no images');
 -      return this.restorePdfFallback(result, 'Vision bridge could not run.');
 -    }
--
++      if (result.error) {
++        // A failed read's texts are strings. A branch this deployment never
++        // takes states no authors for them; its result states none (null) and
++        // is refused if it is ever carried.
++        return {
++          llmContent: String(result.llmContent),
++          llmContentAuthors: result.llmContentAuthors ?? null,
++          returnDisplay: result.returnDisplay || 'Error reading file',
++          error: {
++            message: result.error,
++            type: result.errorType,
++            messageAuthors: result.errorAuthors ?? null,
++          },
++        };
++      }
+ 
 -    const sourceContext: VisionBridgePdfSourceContext = {
 -      displayName: candidate.displayName,
 -      renderedRange: candidate.renderedRange,
@@ -413373,6 +413553,18 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -            result,
 -            `${notice} The transcription was discarded because the bridge did not transcribe every rendered PDF page.`,
 -          );
+-        }
+-        const bridgedParts = normalizeParts(bridgeResult.parts);
+-        if (
+-          bridgedParts.some(
+-            (part) => part.inlineData != null || part.fileData != null,
+-          )
+-        ) {
+-          debugLogger.debug('pdf vision bridge returned media data');
+-          return this.restorePdfFallback(
+-            result,
+-            `${notice} The transcription was discarded because the bridge returned an unsafe media payload.`,
+-          );
 +        // The last page of a file read in pages: it starts past the beginning
 +        // and the file ends with it.
 +        const page = returned ?? { text: String(result.llmContent) };
@@ -413392,33 +413584,9 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +        llmContent = result.llmContent as Part | Part[];
 +      }
 +
-+      // For memory files, prepend a per-file staleness caveat so the model knows
-+      // the content is a point-in-time snapshot and may be stale.
-+      if (isReadText(llmContent) && isAutoMem) {
-+        // Reuse the stat from above when we have it; only re-stat as a
-+        // fallback so memory-file behavior survives a stat failure earlier
-+        // (which would leave `stats` undefined).
-+        try {
-+          const memStat = stats ?? (await fs.stat(absPath));
-+          // The note, and the age it states, are the client's.
-+          const note = memoryFreshnessNote(memStat.mtimeMs);
-+          if (note) {
-+            llmContent = composed(harnessText(note), llmContent);
-+          }
-+        } catch {
-+          // Best-effort — if stat fails, omit the note silently.
-         }
--        const bridgedParts = normalizeParts(bridgeResult.parts);
--        if (
--          bridgedParts.some(
--            (part) => part.inlineData != null || part.fileData != null,
--          )
--        ) {
--          debugLogger.debug('pdf vision bridge returned media data');
--          return this.restorePdfFallback(
--            result,
--            `${notice} The transcription was discarded because the bridge returned an unsafe media payload.`,
--          );
++      // A memory file's text is led by its staleness note.
++      if (isReadText(llmContent) && note) {
++        llmContent = composed(harnessText(note), llmContent);
 +      }
 +
 +      // A text page is one inline block: the page and whatever leads it are
@@ -413562,7 +413730,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
     * Build the placeholder ToolResult returned when the cache indicates
     * the file has not changed since the model last fully read it. The
     * placeholder is intentionally explicit about its assumptions so the
-@@ -498,149 +607,144 @@
+@@ -498,149 +612,144 @@
     * No `logFileOperation` is emitted on this path: the file_unchanged
     * fast-path bypasses the read pipeline entirely, and the existing
     * `FileOperationEvent` schema has no representation for "served from

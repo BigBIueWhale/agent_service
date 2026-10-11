@@ -8,11 +8,14 @@
 // packages/core/src/test-utils/token-counter.ts while it runs the tests, and
 // takes away after: every text a test counts is counted by the served
 // tokenizer (count_server.py, on /sock/count.sock) and recorded, by the
-// SHA-256 of its UTF-8, in /rec/counts.jsonl. It exports what the counter
-// does, so the tests run as they do against the record.
+// SHA-256 of its UTF-8, in /rec/counts.jsonl, with the test that counted it
+// first in this process, so a text that differs between runs can be named by
+// the test that counts it. It exports what the counter does, so the tests run
+// as they do against the record.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { expect } from 'vitest';
 
 const counted = new Map<string, number>();
 
@@ -38,7 +41,11 @@ export function servedTokens(text: string): number {
     throw new Error(`the served tokenizer answered ${JSON.stringify(reply.toString())}, not a count`);
   }
   counted.set(sha, n);
-  appendFileSync('/rec/counts.jsonl', `${JSON.stringify({ sha, n })}\n`);
+  const { testPath, currentTestName } = expect.getState();
+  appendFileSync(
+    '/rec/counts.jsonl',
+    `${JSON.stringify({ sha, n, bytes: Buffer.byteLength(text, 'utf8'), file: testPath, test: currentTestName })}\n`,
+  );
   return n;
 }
 

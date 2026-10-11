@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `df81728bc8e9d5b34e1174bd474da9d56c224a176bb6245f6d439c969509645f`
+- Review-diff SHA-256: `f3ada733954f12b24109b217f10b29dd87e248252b74672a4babdff6e283a1bf`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `8a9deac5f69ee3c44126239a42fbcce4cabd12819ec2aa31c55f2bc434644e16`
+- Transformer-manifest SHA-256: `b561eced284ac42738df3fc98a03d40aeb621369d102555360270961c85d6f25`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -239,7 +239,11 @@ bound is applied, and anything larger is kept whole in a file and paged back
 rather than shortened. The tests count text the same way: their counter,
 `servedTokens`, answers from the served tokenizer's count of every text they
 count, recorded with it by `scripts/served-token-counts/record.sh`, and refuses
-a text it holds no count of. They counted four bytes a token before, a rate
+a text it holds no count of. The recorder runs the image's own test selection
+step as the build runs it, once on its own day and once on another, with every
+clock the tests read moved together, and refuses a text counted on one day and
+not the other, since the build counts on a day of its own; it keeps the record
+only once that step passes against it. They counted four bytes a token before, a rate
 under which a bound that skipped the count for any text within four times `M`
 bytes passed every one of them; digits, which the tokenizer reads one a token,
 now refuse that. `S`, a compaction snapshot, is 32,768 tokens, counted

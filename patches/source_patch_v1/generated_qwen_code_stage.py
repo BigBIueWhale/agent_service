@@ -6,7 +6,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'df81728bc8e9d5b34e1174bd474da9d56c224a176bb6245f6d439c969509645f',
+  'review_sha256': 'f3ada733954f12b24109b217f10b29dd87e248252b74672a4babdff6e283a1bf',
   'files': ({'path': '.qwen/e2e-tests/2026-06-13-file-history-snapshot-persistence.md',
              'before_sha256': '16349157c5709d11cd1469596ac74326feed9714aaa60bc528cbb8e70df9ee0b',
              'after_sha256': 'dec46fa71c05a0934cb99c3a253cf2b7918e3e56422fbebbdec13d7436cf9e54'},
@@ -2559,7 +2559,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'f55c51f7a27b95d8dd6043543f3ac76648943c02924e2241741891b1d0c99849'},
             {'path': 'packages/core/src/test-utils/served-token-counts.json',
              'before_sha256': None,
-             'after_sha256': '3607e054b59ca1e0af41b350f207a1bbe6ccea96d96e1b76fdb7dbf17680595f'},
+             'after_sha256': '97dad088436bf25efab9e611ddfd15c9140e1ff159ea20d0933b1dfee4326de6'},
             {'path': 'packages/core/src/test-utils/terminal-usage-fixture.ts',
              'before_sha256': None,
              'after_sha256': '7725a59194f7db449eea69eaeb30f19ea4141242241d1030b18c49d74fa81fe5'},
@@ -2685,10 +2685,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '919bb50470845497d299e531eb2e00edb2b0a946300c05d025d728f2fa5dbde6'},
             {'path': 'packages/core/src/tools/read-file.test.ts',
              'before_sha256': '03e21f96d35d1c07c9d7532e7b8340b7aca2707c3ac920e349655148cd965fc8',
-             'after_sha256': 'ee465859ec230ae1e11e0c2f5ca1e4aebc87f0fd44bf3bc3db51a767a3b4164f'},
+             'after_sha256': '25b7f90166f4a4de4349ab4f656be064c7cd1e6ccfc2a05e0dc3d7c6b32c1a2c'},
             {'path': 'packages/core/src/tools/read-file.ts',
              'before_sha256': '2aad58d97ebc1ba94b3f0020d690b46d7409c9dba4103eb5dfb01ece38f9049b',
-             'after_sha256': 'd10631134715b29345cb7eb41b9380ba2202135bb52b6c622bd1b6418dd466b7'},
+             'after_sha256': 'b1f04b9e6089314d671c99822b36da6853176d43f1880f9d4b052f0f74c80049'},
             {'path': 'packages/core/src/tools/read-mcp-resource.test.ts',
              'before_sha256': '669b7c2247cc883b0d8f403d48d229f15bf74b677650f640d07ed3036b70590f',
              'after_sha256': '5dce137f3fb74d39277bd538d0af55a2b2c49f26df7a41f6fd3acc55b4a20092'},
@@ -1213256,9 +1213256,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '"3e4d98382af8b89c529d3aec40aa86b87c83ce63888f5dc3a4ac7d172d471fbe": '
                       '18378,\n'
                       '    '
-                      '"3e674f5b63be4dcbfd8615d5d33f1d2f12dc4668b81bde6acd84d07db1e486fb": '
-                      '58,\n'
-                      '    '
                       '"3e7f3a6dc58993cd906c35fc3d4dc4b5a80c1276466619664472541f54dfc7c7": '
                       '13199,\n'
                       '    '
@@ -1214843,6 +1214840,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '"c4e6aa1bd46692d92b8d7b9277e8974dbf36e5a211c03a5bd68b83877a2962da": '
                       '3,\n'
                       '    '
+                      '"c4fbc4d22c52bdfdba30623a1b0b4db71d86f4e3c753c901539d564d7d9181ca": '
+                      '51,\n'
+                      '    '
                       '"c4fe53324a1717f0886d3aacd8935d0d003150ddcb997ec6ed460283033d58da": '
                       '3252,\n'
                       '    '
@@ -1215292,6 +1215292,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    '
                       '"edf5d529a08690a00e75f5529af8da2f2a707ccb10a91a190dcf661e8f733331": '
                       '15985,\n'
+                      '    '
+                      '"ee8d0ec58d7f0c84b1bf2e557eb547a219bc8eac82b5ccf0cc973453fe79ea88": '
+                      '16245,\n'
                       '    '
                       '"eeb2d4849155f31eb0f7f2fcff2d0404c4f4fb49e82004ea66a767e88fc9f449": '
                       '12997,\n'
@@ -1216309,9 +1216312,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    '
                              '"3e4d98382af8b89c529d3aec40aa86b87c83ce63888f5dc3a4ac7d172d471fbe": '
                              '18378,\n'
-                             '    '
-                             '"3e674f5b63be4dcbfd8615d5d33f1d2f12dc4668b81bde6acd84d07db1e486fb": '
-                             '58,\n'
                              '    '
                              '"3e7f3a6dc58993cd906c35fc3d4dc4b5a80c1276466619664472541f54dfc7c7": '
                              '13199,\n'
@@ -1217897,6 +1217897,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '"c4e6aa1bd46692d92b8d7b9277e8974dbf36e5a211c03a5bd68b83877a2962da": '
                              '3,\n'
                              '    '
+                             '"c4fbc4d22c52bdfdba30623a1b0b4db71d86f4e3c753c901539d564d7d9181ca": '
+                             '51,\n'
+                             '    '
                              '"c4fe53324a1717f0886d3aacd8935d0d003150ddcb997ec6ed460283033d58da": '
                              '3252,\n'
                              '    '
@@ -1218346,6 +1218349,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    '
                              '"edf5d529a08690a00e75f5529af8da2f2a707ccb10a91a190dcf661e8f733331": '
                              '15985,\n'
+                             '    '
+                             '"ee8d0ec58d7f0c84b1bf2e557eb547a219bc8eac82b5ccf0cc973453fe79ea88": '
+                             '16245,\n'
                              '    '
                              '"eeb2d4849155f31eb0f7f2fcff2d0404c4f4fb49e82004ea66a767e88fc9f449": '
                              '12997,\n'
@@ -1286671,6 +1286677,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'import { runWithToolArguments } from '
                       "'../core/tool-call-arguments.js';\n"
                       "import { spellRuns } from '../test-utils/authored-runs.js';\n"
+                      "import { memoryFreshnessNote } from '../memory/memoryAge.js';\n"
                       'import {\n'
                       '  countServedTokens,\n'
                       '  servedTokens,\n'
@@ -1286899,6 +1286906,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'../core/tool-call-arguments.js';\n"
                              'import { spellRuns } from '
                              "'../test-utils/authored-runs.js';\n"
+                             'import { memoryFreshnessNote } from '
+                             "'../memory/memoryAge.js';\n"
                              'import {\n'
                              '  countServedTokens,\n'
                              '  servedTokens,\n'
@@ -1288959,7 +1288968,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        INLINE_BLOCK_TOKENS,\n'
                       '        filePath,\n'
                       '        undefined,\n'
-                      '        false,\n'
+                      "        '',\n"
                       '        countServedTokens,\n'
                       '      );\n'
                       '      const joined = (lines: number) =>\n'
@@ -1289215,7 +1289224,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        INLINE_BLOCK_TOKENS,\n'
                       '        filePath,\n'
                       '        undefined,\n'
-                      '        false,\n'
+                      "        '',\n"
                       '        countServedTokens,\n'
                       '      );\n'
                       '      const page = '
@@ -1289248,6 +1289257,94 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '${JSON.stringify(filePath)}, offset: '
                       '${pageLines.length}\\n\\n---\\n\\n`,\n'
                       '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('leads a memory file older than a day with its staleness "
+                      "note, and pages it within one block less that note', async () "
+                      '=> {\n'
+                      "      // A memory file's age is known before its page is read, "
+                      "so a page's room\n"
+                      '      // is the block less the widest statement and the very '
+                      'note that leads\n'
+                      '      // it: the page holds as many whole lines as that room '
+                      'allows, and the\n'
+                      '      // note, the statement and the page are one inline block '
+                      'together.\n'
+                      '      const previousLocal = '
+                      "process.env['QWEN_CODE_MEMORY_LOCAL'];\n"
+                      "      process.env['QWEN_CODE_MEMORY_LOCAL'] = '1';\n"
+                      '      try {\n'
+                      '        const { getAutoMemoryRoot, clearAutoMemoryRootCache } = '
+                      'await import(\n'
+                      "          '../memory/paths.js'\n"
+                      '        );\n'
+                      '        clearAutoMemoryRootCache();\n'
+                      '        const memRoot = getAutoMemoryRoot(tempRootDir);\n'
+                      '        await fsp.mkdir(memRoot, { recursive: true });\n'
+                      "        const memFile = path.join(memRoot, 'AGENTS.md');\n"
+                      "        const line = `${'x'.repeat(999)}\\n`;\n"
+                      '        await fsp.writeFile(memFile, line.repeat(200), '
+                      "'utf-8');\n"
+                      '        // Forty-seven days before now, so the note states the '
+                      'same age on\n'
+                      '        // every run.\n'
+                      '        const written = new Date(Date.now() - 47 * '
+                      '86_400_000);\n'
+                      '        await fsp.utimes(memFile, written, written);\n'
+                      '        const note = memoryFreshnessNote(written.getTime());\n'
+                      "        expect(note).toContain('This memory is 47 days old.');\n"
+                      '\n'
+                      '        const invocation = tool.build({\n'
+                      '          file_path: memFile,\n'
+                      '          offset: 0,\n'
+                      '        }) as ToolInvocation<ReadFileToolParams, ToolResult>;\n'
+                      '        const result = await invocation.execute(abortSignal);\n'
+                      '        expect(result.error).toBeUndefined();\n'
+                      '        const content = String(result.llmContent);\n'
+                      '        expect(content.startsWith(`${note}Showing lines '
+                      '1-`)).toBe(true);\n'
+                      '\n'
+                      '        const pageTokens = await readPageTokens(\n'
+                      '          INLINE_BLOCK_TOKENS,\n'
+                      '          memFile,\n'
+                      '          undefined,\n'
+                      '          note,\n'
+                      '          countServedTokens,\n'
+                      '        );\n'
+                      '        const unled = await readPageTokens(\n'
+                      '          INLINE_BLOCK_TOKENS,\n'
+                      '          memFile,\n'
+                      '          undefined,\n'
+                      "          '',\n"
+                      '          countServedTokens,\n'
+                      '        );\n'
+                      '        expect(pageTokens).toBe(unled - servedTokens(note));\n'
+                      '        const page = '
+                      "content.slice(content.indexOf('\\n\\n---\\n\\n') + 7);\n"
+                      "        const returned = page.split('\\n').filter((text) => "
+                      'text.length > 0);\n'
+                      '        expect(returned.every((text) => text === '
+                      "'x'.repeat(999))).toBe(true);\n"
+                      '        const joined = (lines: number) =>\n'
+                      "          Array(lines).fill('x'.repeat(999)).join('\\n');\n"
+                      '        '
+                      'expect(servedTokens(joined(returned.length))).toBeLessThanOrEqual(\n'
+                      '          pageTokens,\n'
+                      '        );\n'
+                      '        expect(servedTokens(joined(returned.length + '
+                      '1))).toBeGreaterThan(\n'
+                      '          pageTokens,\n'
+                      '        );\n'
+                      '        '
+                      'expect(servedTokens(content)).toBeLessThanOrEqual(INLINE_BLOCK_TOKENS);\n'
+                      '      } finally {\n'
+                      '        if (previousLocal === undefined) {\n'
+                      "          delete process.env['QWEN_CODE_MEMORY_LOCAL'];\n"
+                      '        } else {\n'
+                      "          process.env['QWEN_CODE_MEMORY_LOCAL'] = "
+                      'previousLocal;\n'
+                      '        }\n'
+                      '      }\n'
                       '    });\n'
                       '\n'
                       "    it('stops before a line the page cannot hold and resumes at "
@@ -1289585,7 +1289682,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        INLINE_BLOCK_TOKENS,\n'
                              '        filePath,\n'
                              '        undefined,\n'
-                             '        false,\n'
+                             "        '',\n"
                              '        countServedTokens,\n'
                              '      );\n'
                              '      const joined = (lines: number) =>\n'
@@ -1289867,7 +1289964,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        INLINE_BLOCK_TOKENS,\n'
                              '        filePath,\n'
                              '        undefined,\n'
-                             '        false,\n'
+                             "        '',\n"
                              '        countServedTokens,\n'
                              '      );\n'
                              '      const page = '
@@ -1289902,6 +1289999,101 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '${JSON.stringify(filePath)}, offset: '
                              '${pageLines.length}\\n\\n---\\n\\n`,\n'
                              '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('leads a memory file older than a day with its "
+                             'staleness note, and pages it within one block less that '
+                             "note', async () => {\n"
+                             "      // A memory file's age is known before its page is "
+                             "read, so a page's room\n"
+                             '      // is the block less the widest statement and the '
+                             'very note that leads\n'
+                             '      // it: the page holds as many whole lines as that '
+                             'room allows, and the\n'
+                             '      // note, the statement and the page are one inline '
+                             'block together.\n'
+                             '      const previousLocal = '
+                             "process.env['QWEN_CODE_MEMORY_LOCAL'];\n"
+                             "      process.env['QWEN_CODE_MEMORY_LOCAL'] = '1';\n"
+                             '      try {\n'
+                             '        const { getAutoMemoryRoot, '
+                             'clearAutoMemoryRootCache } = await import(\n'
+                             "          '../memory/paths.js'\n"
+                             '        );\n'
+                             '        clearAutoMemoryRootCache();\n'
+                             '        const memRoot = getAutoMemoryRoot(tempRootDir);\n'
+                             '        await fsp.mkdir(memRoot, { recursive: true });\n'
+                             '        const memFile = path.join(memRoot, '
+                             "'AGENTS.md');\n"
+                             "        const line = `${'x'.repeat(999)}\\n`;\n"
+                             '        await fsp.writeFile(memFile, line.repeat(200), '
+                             "'utf-8');\n"
+                             '        // Forty-seven days before now, so the note '
+                             'states the same age on\n'
+                             '        // every run.\n'
+                             '        const written = new Date(Date.now() - 47 * '
+                             '86_400_000);\n'
+                             '        await fsp.utimes(memFile, written, written);\n'
+                             '        const note = '
+                             'memoryFreshnessNote(written.getTime());\n'
+                             "        expect(note).toContain('This memory is 47 days "
+                             "old.');\n"
+                             '\n'
+                             '        const invocation = tool.build({\n'
+                             '          file_path: memFile,\n'
+                             '          offset: 0,\n'
+                             '        }) as ToolInvocation<ReadFileToolParams, '
+                             'ToolResult>;\n'
+                             '        const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             '        expect(result.error).toBeUndefined();\n'
+                             '        const content = String(result.llmContent);\n'
+                             '        expect(content.startsWith(`${note}Showing lines '
+                             '1-`)).toBe(true);\n'
+                             '\n'
+                             '        const pageTokens = await readPageTokens(\n'
+                             '          INLINE_BLOCK_TOKENS,\n'
+                             '          memFile,\n'
+                             '          undefined,\n'
+                             '          note,\n'
+                             '          countServedTokens,\n'
+                             '        );\n'
+                             '        const unled = await readPageTokens(\n'
+                             '          INLINE_BLOCK_TOKENS,\n'
+                             '          memFile,\n'
+                             '          undefined,\n'
+                             "          '',\n"
+                             '          countServedTokens,\n'
+                             '        );\n'
+                             '        expect(pageTokens).toBe(unled - '
+                             'servedTokens(note));\n'
+                             '        const page = '
+                             "content.slice(content.indexOf('\\n\\n---\\n\\n') + 7);\n"
+                             "        const returned = page.split('\\n').filter((text) "
+                             '=> text.length > 0);\n'
+                             '        expect(returned.every((text) => text === '
+                             "'x'.repeat(999))).toBe(true);\n"
+                             '        const joined = (lines: number) =>\n'
+                             '          '
+                             "Array(lines).fill('x'.repeat(999)).join('\\n');\n"
+                             '        '
+                             'expect(servedTokens(joined(returned.length))).toBeLessThanOrEqual(\n'
+                             '          pageTokens,\n'
+                             '        );\n'
+                             '        expect(servedTokens(joined(returned.length + '
+                             '1))).toBeGreaterThan(\n'
+                             '          pageTokens,\n'
+                             '        );\n'
+                             '        '
+                             'expect(servedTokens(content)).toBeLessThanOrEqual(INLINE_BLOCK_TOKENS);\n'
+                             '      } finally {\n'
+                             '        if (previousLocal === undefined) {\n'
+                             "          delete process.env['QWEN_CODE_MEMORY_LOCAL'];\n"
+                             '        } else {\n'
+                             "          process.env['QWEN_CODE_MEMORY_LOCAL'] = "
+                             'previousLocal;\n'
+                             '        }\n'
+                             '      }\n'
                              '    });\n'
                              '\n'
                              "    it('stops before a line the page cannot hold and "
@@ -1290570,502 +1290762,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        ToolResult\n'
                        '      >;\n'
                        '\n'
-                       '      const result = await invocation.execute(abortSignal);\n',
-             'after': "          displayName: 'document.pdf',\n"
-                      '        },\n'
-                      '      });\n'
-                      "      expect(result.returnDisplay).toBe('Read pdf file: "
-                      "document.pdf');\n"
-                      '    });\n'
-                      '\n'
-                      "    it('should handle binary file and skip content', async () "
-                      '=> {\n'
-                      "      const binPath = path.join(tempRootDir, 'binary.bin');\n"
-                      '      // Binary data with null bytes\n'
-                      '      const binaryData = Buffer.from([0x00, 0xff, 0x00, '
-                      '0xff]);\n'
-                      '      await fsp.writeFile(binPath, binaryData);\n'
-                      '      const params: ReadFileToolParams = { file_path: binPath, '
-                      'offset: 0 };\n'
-                      '      const invocation = tool.build(params) as ToolInvocation<\n'
-                      '        ReadFileToolParams,\n'
-                      '        ToolResult\n'
-                      '      >;\n'
-                      '\n'
-                      '      const result = await invocation.execute(abortSignal);\n',
-             'review_before': "          displayName: 'document.pdf',\n"
-                              '        },\n'
-                              '      });\n'
-                              "      expect(result.returnDisplay).toBe('Read pdf file: "
-                              "document.pdf');\n"
-                              '    });\n'
-                              '\n'
-                              "    describe('PDF vision bridge fallback', () => {\n"
-                              '      function createTextOnlyTool(): ReadFileTool {\n'
-                              '        return new ReadFileTool({\n'
-                              '          getFileService: () => new '
-                              'FileDiscoveryService(tempRootDir),\n'
-                              '          getFileSystemService: () => new '
-                              'StandardFileSystemService(),\n'
-                              '          getTargetDir: () => tempRootDir,\n'
-                              '          getWorkspaceContext: () => '
-                              'createMockWorkspaceContext(tempRootDir),\n'
-                              "          getModel: () => 'text-only-model',\n"
-                              '          getEffectiveInputModalities: () => ({}),\n'
-                              '          getDefaultVisionBridgeModel: () => ({\n'
-                              "            id: 'qwen3-vl-plus',\n"
-                              '            baseUrl: '
-                              "'https://dashscope.aliyuncs.com/v1',\n"
-                              '          }),\n'
-                              '          storage: {\n'
-                              '            getProjectTempDir: () => '
-                              "path.join(tempRootDir, '.temp'),\n"
-                              '            getProjectDir: () => path.join(tempRootDir, '
-                              "'.project'),\n"
-                              '            getUserSkillsDirs: () => [\n'
-                              "              path.join(os.homedir(), '.qwen', "
-                              "'skills'),\n"
-                              '            ],\n'
-                              '          },\n'
-                              '          getTruncateToolOutputThreshold: () => 2500,\n'
-                              '          getTruncateToolOutputLines: () => 500,\n'
-                              '          getContentGeneratorConfig: () => ({ '
-                              'modalities: {} }),\n'
-                              '          getFileReadCache: () => fileReadCache,\n'
-                              '          getFileReadCacheDisabled: () => false,\n'
-                              '        } as unknown as Config);\n'
-                              '      }\n'
-                              '\n'
-                              '      async function readCandidate(\n'
-                              '        signalOverride: AbortSignal = abortSignal,\n'
-                              '      ): Promise<ToolResult> {\n'
-                              '        const pdfPath = path.join(tempRootDir, '
-                              "'scanned.pdf');\n"
-                              '        await fsp.writeFile(pdfPath, '
-                              "Buffer.from('%PDF-1.7'));\n"
-                              '        const invocation = '
-                              'createTextOnlyTool().build({\n'
-                              '          file_path: pdfPath,\n'
-                              "          pages: '20-25',\n"
-                              '        }) as ToolInvocation<ReadFileToolParams, '
-                              'ToolResult>;\n'
-                              '        return invocation.execute(signalOverride);\n'
-                              '      }\n'
-                              '\n'
-                              '      function bridgeDisplay(result: ToolResult): '
-                              'VisionBridgeNoticeDisplay {\n'
-                              '        expect(result.returnDisplay).toMatchObject({\n'
-                              "          type: 'vision_bridge_notice',\n"
-                              '        });\n'
-                              '        return result.returnDisplay as '
-                              'VisionBridgeNoticeDisplay;\n'
-                              '      }\n'
-                              '\n'
-                              '      beforeEach(() => {\n'
-                              '        '
-                              'visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);\n'
-                              '        '
-                              'pdfMocks.renderPDFPagesToImages.mockResolvedValue({\n'
-                              '          success: true,\n'
-                              "          images: ['20', '21', '22', '23'].map((data) "
-                              '=> ({\n'
-                              '            data,\n'
-                              "            mimeType: 'image/jpeg',\n"
-                              '          })),\n'
-                              '          bytesTruncated: false,\n'
-                              '        });\n'
-                              '      });\n'
-                              '\n'
-                              "      it('replaces candidate images with an untrusted "
-                              "transcription before returning', async () => {\n"
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
-                              '          applied: true,\n'
-                              "          status: 'ok',\n"
-                              '          parts: [\n'
-                              '            {\n'
-                              "              text: '[Untrusted transcription]\\nPage "
-                              '20: heading\\nPages 24-25 exist but were not '
-                              'transcribed; call read_file on the original PDF with a '
-                              "later page range to continue.',\n"
-                              '            },\n'
-                              '          ],\n'
-                              '          convertedCount: 4,\n'
-                              '          omittedCount: 0,\n'
-                              "          modelId: 'qwen3-vl-plus',\n"
-                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
-                              '          egressOccurred: true,\n'
-                              '        });\n'
-                              '\n'
-                              '        const result = await readCandidate();\n'
-                              '\n'
-                              '        expect(result.error).toBeUndefined();\n'
-                              '        '
-                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
-                              '        '
-                              'expect(JSON.stringify(result.llmContent)).toContain(\n'
-                              "          'Untrusted transcription',\n"
-                              '        );\n'
-                              '        '
-                              'expect(JSON.stringify(result.llmContent)).toContain(\n'
-                              "          'Pages 24-25 exist but were not "
-                              "transcribed',\n"
-                              '        );\n'
-                              '        '
-                              'expect(JSON.stringify(result.llmContent)).not.toContain(\n'
-                              "          'pages 24-25 were not included',\n"
-                              '        );\n'
-                              '        const display = bridgeDisplay(result);\n'
-                              '        expect(display.summary).toContain(\n'
-                              "          'transcribed PDF pages 20-23; remaining pages "
-                              "24-25',\n"
-                              '        );\n'
-                              '        '
-                              "expect(display.notice).toContain('qwen3-vl-plus');\n"
-                              '        '
-                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"
-                              '        '
-                              'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
-                              '          expect.objectContaining({\n'
-                              '            sourceContext: {\n'
-                              "              displayName: 'scanned.pdf',\n"
-                              '              renderedRange: { firstPage: 20, lastPage: '
-                              '23 },\n'
-                              '              continuation: {\n'
-                              "                certainty: 'known',\n"
-                              '                firstPage: 24,\n'
-                              '                lastPage: 25,\n'
-                              '              },\n'
-                              '            },\n'
-                              '          }),\n'
-                              '        );\n'
-                              '        const sentParts = '
-                              'visionBridgeMocks.runVisionBridge.mock.calls[0][0]\n'
-                              '          .parts as Array<{ inlineData?: unknown; '
-                              'text?: string }>;\n'
-                              '        expect(sentParts).toHaveLength(4);\n'
-                              '        expect(sentParts.every((part) => '
-                              'part.inlineData)).toBe(true);\n'
-                              '      });\n'
-                              '\n'
-                              "      it('does not present unknown continuation pages "
-                              "as certain', async () => {\n"
-                              '        '
-                              'pdfMocks.getPDFPageCount.mockResolvedValue(null);\n'
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
-                              '          applied: true,\n'
-                              "          status: 'ok',\n"
-                              "          parts: [{ text: '[Untrusted "
-                              "transcription]\\nPage 20: heading' }],\n"
-                              '          convertedCount: 4,\n'
-                              '          omittedCount: 0,\n'
-                              "          modelId: 'qwen3-vl-plus',\n"
-                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
-                              '          egressOccurred: true,\n'
-                              '        });\n'
-                              '\n'
-                              '        const result = await readCandidate();\n'
-                              '\n'
-                              '        const display = bridgeDisplay(result);\n'
-                              '        expect(display.summary).toContain(\n'
-                              "          'additional pages may exist from page 24 "
-                              "through page 25',\n"
-                              '        );\n'
-                              '        '
-                              "expect(display.summary).not.toContain('remaining pages "
-                              "24-25');\n"
-                              '        '
-                              'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
-                              '          expect.objectContaining({\n'
-                              '            sourceContext: expect.objectContaining({\n'
-                              '              continuation: {\n'
-                              "                certainty: 'possible',\n"
-                              '                firstPage: 24,\n'
-                              '                requestedLastPage: 25,\n'
-                              '              },\n'
-                              '            }),\n'
-                              '          }),\n'
-                              '        );\n'
-                              '      });\n'
-                              '\n'
-                              '      it.each([\n'
-                              "        ['request failure', 'the vision model request "
-                              "failed'],\n"
-                              "        ['empty response', 'the vision model returned "
-                              "no description'],\n"
-                              "        ['timeout', 'timed out after 30000ms'],\n"
-                              "        ['model selection changed', 'no image-capable "
-                              "model is available'],\n"
-                              "      ])('restores the original PDF error after %s', "
-                              'async (_name, error) => {\n'
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
-                              '          applied: true,\n'
-                              "          status: 'failed',\n"
-                              '          convertedCount: 0,\n'
-                              '          omittedCount: 0,\n'
-                              "          modelId: 'qwen3-vl-plus',\n"
-                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
-                              '          egressOccurred: true,\n'
-                              '          error,\n'
-                              '        });\n'
-                              '\n'
-                              '        const result = await readCandidate();\n'
-                              '\n'
-                              '        '
-                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
-                              "        expect(result.error?.message).toBe('No "
-                              "extractable text layer.');\n"
-                              "        expect(result.llmContent).toContain('Cannot "
-                              "extract text from PDF');\n"
-                              '        '
-                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
-                              "        expect(result.llmContent).not.toContain('Vision "
-                              "bridge');\n"
-                              '        const display = bridgeDisplay(result);\n'
-                              '        expect(display.summary).toContain(\n'
-                              "          'rendered PDF pages 20-23; remaining pages "
-                              "24-25',\n"
-                              '        );\n'
-                              '        '
-                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"
-                              '      });\n'
-                              '\n'
-                              "      it('restores the PDF error for an unusable "
-                              "successful bridge result', async () => {\n"
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
-                              '          applied: false,\n'
-                              "          status: 'ok',\n"
-                              '          convertedCount: 4,\n'
-                              '          omittedCount: 0,\n'
-                              "          modelId: 'qwen3-vl-plus',\n"
-                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
-                              '          egressOccurred: true,\n'
-                              '        });\n'
-                              '\n'
-                              '        const result = await readCandidate();\n'
-                              '\n'
-                              '        '
-                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
-                              '        '
-                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
-                              '        '
-                              'expect(bridgeDisplay(result).notice).toContain(\n'
-                              "          'dashscope.aliyuncs.com',\n"
-                              '        );\n'
-                              '      });\n'
-                              '\n'
-                              '      it.each([\n'
-                              '        [\n'
-                              "          'inlineData',\n"
-                              "          { inlineData: { data: 'unsafe', mimeType: "
-                              "'application/pdf' } },\n"
-                              '        ],\n'
-                              '        [\n'
-                              "          'fileData',\n"
-                              '          {\n'
-                              '            fileData: {\n'
-                              "              fileUri: 'file:///tmp/unsafe.pdf',\n"
-                              "              mimeType: 'application/pdf',\n"
-                              '            },\n'
-                              '          },\n'
-                              '        ],\n'
-                              '      ])(\n'
-                              "        'fails closed when a successful bridge result "
-                              "still contains %s',\n"
-                              '        async (mediaKey, mediaPart) => {\n'
-                              '          '
-                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
-                              '            applied: true,\n'
-                              "            status: 'ok',\n"
-                              '            parts: [mediaPart],\n'
-                              '            convertedCount: 4,\n'
-                              '            omittedCount: 0,\n'
-                              "            modelId: 'qwen3-vl-plus',\n"
-                              "            modelEndpoint: 'dashscope.aliyuncs.com',\n"
-                              '            egressOccurred: true,\n'
-                              '          });\n'
-                              '\n'
-                              '          const result = await readCandidate();\n'
-                              '\n'
-                              '          '
-                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
-                              "          expect(result.llmContent).toContain('Cannot "
-                              "extract text from PDF');\n"
-                              '          '
-                              'expect(JSON.stringify(result.llmContent)).not.toContain(mediaKey);\n'
-                              '          const display = bridgeDisplay(result);\n'
-                              '          '
-                              "expect(display.notice).toContain('qwen3-vl-plus');\n"
-                              '          '
-                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"
-                              '          '
-                              "expect(display.notice).toContain('transcription was "
-                              "discarded');\n"
-                              "          expect(display.notice).not.toContain('vision "
-                              "model request failed');\n"
-                              '        },\n'
-                              '      );\n'
-                              '\n'
-                              "      it('restores the PDF error when the bridge omits "
-                              "a rendered page', async () => {\n"
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
-                              '          applied: true,\n'
-                              "          status: 'ok',\n"
-                              "          parts: [{ text: '[Untrusted "
-                              "transcription]\\nPages 20-22' }],\n"
-                              '          convertedCount: 3,\n'
-                              '          omittedCount: 1,\n'
-                              "          modelId: 'qwen3-vl-plus',\n"
-                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
-                              '          egressOccurred: true,\n'
-                              '        });\n'
-                              '\n'
-                              '        const result = await readCandidate();\n'
-                              '\n'
-                              '        '
-                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
-                              "        expect(result.llmContent).toContain('Cannot "
-                              "extract text from PDF');\n"
-                              '        '
-                              'expect(bridgeDisplay(result).notice).toContain(\n'
-                              "          'dashscope.aliyuncs.com',\n"
-                              '        );\n'
-                              '        '
-                              'expect(bridgeDisplay(result).notice).toContain(\n'
-                              "          'transcription was discarded',\n"
-                              '        );\n'
-                              '        '
-                              'expect(bridgeDisplay(result).notice).not.toContain(\n'
-                              "          'vision model request failed',\n"
-                              '        );\n'
-                              '        '
-                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
-                              '      });\n'
-                              '\n'
-                              "      it('restores the PDF error when the bridge throws "
-                              "before replacement', async () => {\n"
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockRejectedValue(\n'
-                              "          new Error('network failure'),\n"
-                              '        );\n'
-                              '\n'
-                              '        const result = await readCandidate();\n'
-                              '\n'
-                              '        '
-                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
-                              "        expect(result.error?.message).toBe('No "
-                              "extractable text layer.');\n"
-                              "        expect(result.llmContent).toContain('Cannot "
-                              "extract text from PDF');\n"
-                              '        '
-                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
-                              '        '
-                              'expect(bridgeDisplay(result).notice).toContain(\n'
-                              "          'failed before producing a transcription',\n"
-                              '        );\n'
-                              '      });\n'
-                              '\n'
-                              "      it('propagates cancellation instead of restoring "
-                              "a PDF error', async () => {\n"
-                              '        const controller = new AbortController();\n'
-                              '        '
-                              'visionBridgeMocks.runVisionBridge.mockImplementation(async '
-                              '() => {\n'
-                              '          controller.abort();\n'
-                              '          return {\n'
-                              '            applied: false,\n'
-                              "            status: 'skipped',\n"
-                              '            convertedCount: 0,\n'
-                              '            omittedCount: 0,\n'
-                              "            modelId: 'qwen3-vl-plus',\n"
-                              '          };\n'
-                              '        });\n'
-                              '\n'
-                              '        await '
-                              'expect(readCandidate(controller.signal)).rejects.toThrow(\n'
-                              '          /abort/i,\n'
-                              '        );\n'
-                              '      });\n'
-                              '\n'
-                              "      it('preserves ordinary images for the shared "
-                              "tool-result bridge', async () => {\n"
-                              '        const imagePath = path.join(tempRootDir, '
-                              "'image.png');\n"
-                              '        await fsp.writeFile(\n'
-                              '          imagePath,\n'
-                              '          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, '
-                              '0x0a, 0x1a, 0x0a]),\n'
-                              '        );\n'
-                              '        const invocation = '
-                              'createTextOnlyTool().build({\n'
-                              '          file_path: imagePath,\n'
-                              '        }) as ToolInvocation<ReadFileToolParams, '
-                              'ToolResult>;\n'
-                              '\n'
-                              '        const result = await '
-                              'invocation.execute(abortSignal);\n'
-                              '\n'
-                              '        expect(result.llmContent).toMatchObject({\n'
-                              '          inlineData: {\n'
-                              "            mimeType: 'image/png',\n"
-                              "            displayName: 'image.png',\n"
-                              '          },\n'
-                              '        });\n'
-                              '        '
-                              'expect(visionBridgeMocks.runVisionBridge).not.toHaveBeenCalled();\n'
-                              '      });\n'
-                              '    });\n'
-                              '\n'
-                              "    it('should handle binary file and skip content', "
-                              'async () => {\n'
-                              '      const binPath = path.join(tempRootDir, '
-                              "'binary.bin');\n"
-                              '      // Binary data with null bytes\n'
-                              '      const binaryData = Buffer.from([0x00, 0xff, 0x00, '
-                              '0xff]);\n'
-                              '      await fsp.writeFile(binPath, binaryData);\n'
-                              '      const params: ReadFileToolParams = { file_path: '
-                              'binPath };\n'
-                              '      const invocation = tool.build(params) as '
-                              'ToolInvocation<\n'
-                              '        ReadFileToolParams,\n'
-                              '        ToolResult\n'
-                              '      >;\n'
-                              '\n'
-                              '      const result = await '
-                              'invocation.execute(abortSignal);\n',
-             'review_after': "          displayName: 'document.pdf',\n"
-                             '        },\n'
-                             '      });\n'
-                             "      expect(result.returnDisplay).toBe('Read pdf file: "
-                             "document.pdf');\n"
-                             '    });\n'
-                             '\n'
-                             "    it('should handle binary file and skip content', "
-                             'async () => {\n'
-                             '      const binPath = path.join(tempRootDir, '
-                             "'binary.bin');\n"
-                             '      // Binary data with null bytes\n'
-                             '      const binaryData = Buffer.from([0x00, 0xff, 0x00, '
-                             '0xff]);\n'
-                             '      await fsp.writeFile(binPath, binaryData);\n'
-                             '      const params: ReadFileToolParams = { file_path: '
-                             'binPath, offset: 0 };\n'
-                             '      const invocation = tool.build(params) as '
-                             'ToolInvocation<\n'
-                             '        ReadFileToolParams,\n'
-                             '        ToolResult\n'
-                             '      >;\n'
-                             '\n'
-                             '      const result = await '
-                             'invocation.execute(abortSignal);\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-13',
-             'path': 'packages/core/src/tools/read-file.test.ts',
-             'before': '    });\n'
+                       '      const result = await invocation.execute(abortSignal);\n'
+                       '      expect(result.llmContent).toBe(\n'
+                       "        'Cannot display content of binary file: binary.bin',\n"
+                       '      );\n'
+                       "      expect(result.returnDisplay).toBe('Skipped binary file: "
+                       "binary.bin');\n"
+                       '    });\n'
                        '\n'
                        "    it('should handle SVG file as text', async () => {\n"
                        "      const svgPath = path.join(tempRootDir, 'image.svg');\n"
@@ -1291121,200 +1290824,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        ToolResult\n'
                        '      >;\n'
                        '\n'
-                       '      const result = await invocation.execute(abortSignal);\n',
-             'after': '    });\n'
-                      '\n'
-                      "    it('should handle SVG file as text', async () => {\n"
-                      "      const svgPath = path.join(tempRootDir, 'image.svg');\n"
-                      '      const svgContent = \'<svg><circle cx="50" cy="50" '
-                      'r="40"/></svg>\';\n'
-                      "      await fsp.writeFile(svgPath, svgContent, 'utf-8');\n"
-                      '      const params: ReadFileToolParams = { file_path: svgPath, '
-                      'offset: 0 };\n'
-                      '      const invocation = tool.build(params) as ToolInvocation<\n'
-                      '        ReadFileToolParams,\n'
-                      '        ToolResult\n'
-                      '      >;\n'
-                      '\n'
-                      '      const result = await invocation.execute(abortSignal);\n'
-                      '      expect(result.llmContent).toBe(svgContent);\n'
-                      "      expect(result.returnDisplay).toBe('Read SVG as text: "
-                      "image.svg');\n"
-                      '    });\n'
-                      '\n'
-                      "    it('reads a large SVG whole, for the one bound on a tool "
-                      "result to hold', async () => {\n"
-                      "      const svgPath = path.join(tempRootDir, 'large.svg');\n"
-                      "      // Larger than 1MB: no size of this tool's own refuses "
-                      'it. The result\n'
-                      "      // is held to one inline block where the model's copy is "
-                      'made, and the\n'
-                      '      // whole of it is retained there to be read back a page '
-                      'at a time.\n'
-                      "      const largeContent = '<svg>' + 'x'.repeat(1024 * 1024 + "
-                      "1) + '</svg>';\n"
-                      "      await fsp.writeFile(svgPath, largeContent, 'utf-8');\n"
-                      '      const params: ReadFileToolParams = { file_path: svgPath, '
-                      'offset: 0 };\n'
-                      '      const invocation = tool.build(params) as ToolInvocation<\n'
-                      '        ReadFileToolParams,\n'
-                      '        ToolResult\n'
-                      '      >;\n'
-                      '\n'
-                      '      const result = await invocation.execute(abortSignal);\n'
-                      '      expect(result.error).toBeUndefined();\n'
-                      '      expect(result.llmContent).toBe(largeContent);\n'
-                      "      expect(result.returnDisplay).toBe('Read SVG as text: "
-                      "large.svg');\n"
-                      '    });\n'
-                      '\n'
-                      "    it('should handle empty file', async () => {\n"
-                      "      const emptyPath = path.join(tempRootDir, 'empty.txt');\n"
-                      "      await fsp.writeFile(emptyPath, '', 'utf-8');\n"
-                      '      const params: ReadFileToolParams = { file_path: '
-                      'emptyPath, offset: 0 };\n'
-                      '      const invocation = tool.build(params) as ToolInvocation<\n'
-                      '        ReadFileToolParams,\n'
-                      '        ToolResult\n'
-                      '      >;\n'
-                      '\n'
-                      '      const result = await invocation.execute(abortSignal);\n',
-             'review_before': '    });\n'
-                              '\n'
-                              "    it('should handle SVG file as text', async () => {\n"
-                              '      const svgPath = path.join(tempRootDir, '
-                              "'image.svg');\n"
-                              '      const svgContent = \'<svg><circle cx="50" cy="50" '
-                              'r="40"/></svg>\';\n'
-                              '      await fsp.writeFile(svgPath, svgContent, '
-                              "'utf-8');\n"
-                              '      const params: ReadFileToolParams = { file_path: '
-                              'svgPath };\n'
-                              '      const invocation = tool.build(params) as '
-                              'ToolInvocation<\n'
-                              '        ReadFileToolParams,\n'
-                              '        ToolResult\n'
-                              '      >;\n'
-                              '\n'
-                              '      const result = await '
-                              'invocation.execute(abortSignal);\n'
-                              '      expect(result.llmContent).toBe(svgContent);\n'
-                              "      expect(result.returnDisplay).toBe('Read SVG as "
-                              "text: image.svg');\n"
-                              '    });\n'
-                              '\n'
-                              "    it('should handle large SVG file', async () => {\n"
-                              '      const svgPath = path.join(tempRootDir, '
-                              "'large.svg');\n"
-                              '      // Create SVG content larger than 1MB\n'
-                              "      const largeContent = '<svg>' + 'x'.repeat(1024 * "
-                              "1024 + 1) + '</svg>';\n"
-                              '      await fsp.writeFile(svgPath, largeContent, '
-                              "'utf-8');\n"
-                              '      const params: ReadFileToolParams = { file_path: '
-                              'svgPath };\n'
-                              '      const invocation = tool.build(params) as '
-                              'ToolInvocation<\n'
-                              '        ReadFileToolParams,\n'
-                              '        ToolResult\n'
-                              '      >;\n'
-                              '\n'
-                              '      const result = await '
-                              'invocation.execute(abortSignal);\n'
-                              '      expect(result.llmContent).toBe(\n'
-                              "        'Cannot display content of SVG file larger than "
-                              "1MB: large.svg',\n"
-                              '      );\n'
-                              '      expect(result.returnDisplay).toBe(\n'
-                              "        'Skipped large SVG file (>1MB): large.svg',\n"
-                              '      );\n'
-                              '    });\n'
-                              '\n'
-                              "    it('should handle empty file', async () => {\n"
-                              '      const emptyPath = path.join(tempRootDir, '
-                              "'empty.txt');\n"
-                              "      await fsp.writeFile(emptyPath, '', 'utf-8');\n"
-                              '      const params: ReadFileToolParams = { file_path: '
-                              'emptyPath };\n'
-                              '      const invocation = tool.build(params) as '
-                              'ToolInvocation<\n'
-                              '        ReadFileToolParams,\n'
-                              '        ToolResult\n'
-                              '      >;\n'
-                              '\n'
-                              '      const result = await '
-                              'invocation.execute(abortSignal);\n',
-             'review_after': '    });\n'
-                             '\n'
-                             "    it('should handle SVG file as text', async () => {\n"
-                             '      const svgPath = path.join(tempRootDir, '
-                             "'image.svg');\n"
-                             '      const svgContent = \'<svg><circle cx="50" cy="50" '
-                             'r="40"/></svg>\';\n'
-                             '      await fsp.writeFile(svgPath, svgContent, '
-                             "'utf-8');\n"
-                             '      const params: ReadFileToolParams = { file_path: '
-                             'svgPath, offset: 0 };\n'
-                             '      const invocation = tool.build(params) as '
-                             'ToolInvocation<\n'
-                             '        ReadFileToolParams,\n'
-                             '        ToolResult\n'
-                             '      >;\n'
-                             '\n'
-                             '      const result = await '
-                             'invocation.execute(abortSignal);\n'
-                             '      expect(result.llmContent).toBe(svgContent);\n'
-                             "      expect(result.returnDisplay).toBe('Read SVG as "
-                             "text: image.svg');\n"
-                             '    });\n'
-                             '\n'
-                             "    it('reads a large SVG whole, for the one bound on a "
-                             "tool result to hold', async () => {\n"
-                             '      const svgPath = path.join(tempRootDir, '
-                             "'large.svg');\n"
-                             "      // Larger than 1MB: no size of this tool's own "
-                             'refuses it. The result\n'
-                             "      // is held to one inline block where the model's "
-                             'copy is made, and the\n'
-                             '      // whole of it is retained there to be read back a '
-                             'page at a time.\n'
-                             "      const largeContent = '<svg>' + 'x'.repeat(1024 * "
-                             "1024 + 1) + '</svg>';\n"
-                             '      await fsp.writeFile(svgPath, largeContent, '
-                             "'utf-8');\n"
-                             '      const params: ReadFileToolParams = { file_path: '
-                             'svgPath, offset: 0 };\n'
-                             '      const invocation = tool.build(params) as '
-                             'ToolInvocation<\n'
-                             '        ReadFileToolParams,\n'
-                             '        ToolResult\n'
-                             '      >;\n'
-                             '\n'
-                             '      const result = await '
-                             'invocation.execute(abortSignal);\n'
-                             '      expect(result.error).toBeUndefined();\n'
-                             '      expect(result.llmContent).toBe(largeContent);\n'
-                             "      expect(result.returnDisplay).toBe('Read SVG as "
-                             "text: large.svg');\n"
-                             '    });\n'
-                             '\n'
-                             "    it('should handle empty file', async () => {\n"
-                             '      const emptyPath = path.join(tempRootDir, '
-                             "'empty.txt');\n"
-                             "      await fsp.writeFile(emptyPath, '', 'utf-8');\n"
-                             '      const params: ReadFileToolParams = { file_path: '
-                             'emptyPath, offset: 0 };\n'
-                             '      const invocation = tool.build(params) as '
-                             'ToolInvocation<\n'
-                             '        ReadFileToolParams,\n'
-                             '        ToolResult\n'
-                             '      >;\n'
-                             '\n'
-                             '      const result = await '
-                             'invocation.execute(abortSignal);\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-14',
-             'path': 'packages/core/src/tools/read-file.test.ts',
-             'before': '            metadata: {},\n'
+                       '      const result = await invocation.execute(abortSignal);\n'
+                       "      expect(result.llmContent).toBe('');\n"
+                       "      expect(result.returnDisplay).toBe('');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should handle Jupyter notebook file', async () => {\n"
+                       "      const nbPath = path.join(tempRootDir, 'test.ipynb');\n"
+                       '      const notebook = {\n'
+                       '        cells: [\n'
+                       '          {\n'
+                       "            cell_type: 'code',\n"
+                       '            source: [\'print("hello")\'],\n'
+                       '            execution_count: 1,\n'
+                       "            outputs: [{ output_type: 'stream', text: "
+                       "['hello\\n'] }],\n"
+                       '            metadata: {},\n'
                        '          },\n'
                        '        ],\n'
                        "        metadata: { language_info: { name: 'python' } },\n"
@@ -1291329,61 +1290854,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        ToolResult\n'
                        '      >;\n'
                        '\n'
-                       '      const result = await invocation.execute(abortSignal);\n',
-             'after': '            metadata: {},\n'
-                      '          },\n'
-                      '        ],\n'
-                      "        metadata: { language_info: { name: 'python' } },\n"
-                      '      };\n'
-                      '      await fsp.writeFile(nbPath, JSON.stringify(notebook), '
-                      "'utf-8');\n"
-                      '      const params: ReadFileToolParams = { file_path: nbPath, '
-                      'offset: 0 };\n'
-                      '      const invocation = tool.build(params) as ToolInvocation<\n'
-                      '        ReadFileToolParams,\n'
-                      '        ToolResult\n'
-                      '      >;\n'
-                      '\n'
-                      '      const result = await invocation.execute(abortSignal);\n',
-             'review_before': '            metadata: {},\n'
-                              '          },\n'
-                              '        ],\n'
-                              "        metadata: { language_info: { name: 'python' } "
-                              '},\n'
-                              '      };\n'
-                              '      await fsp.writeFile(nbPath, '
-                              "JSON.stringify(notebook), 'utf-8');\n"
-                              '      const params: ReadFileToolParams = { file_path: '
-                              'nbPath };\n'
-                              '      const invocation = tool.build(params) as '
-                              'ToolInvocation<\n'
-                              '        ReadFileToolParams,\n'
-                              '        ToolResult\n'
-                              '      >;\n'
-                              '\n'
-                              '      const result = await '
-                              'invocation.execute(abortSignal);\n',
-             'review_after': '            metadata: {},\n'
-                             '          },\n'
-                             '        ],\n'
-                             "        metadata: { language_info: { name: 'python' } "
-                             '},\n'
-                             '      };\n'
-                             '      await fsp.writeFile(nbPath, '
-                             "JSON.stringify(notebook), 'utf-8');\n"
-                             '      const params: ReadFileToolParams = { file_path: '
-                             'nbPath, offset: 0 };\n'
-                             '      const invocation = tool.build(params) as '
-                             'ToolInvocation<\n'
-                             '        ReadFileToolParams,\n'
-                             '        ToolResult\n'
-                             '      >;\n'
-                             '\n'
-                             '      const result = await '
-                             'invocation.execute(abortSignal);\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-15',
-             'path': 'packages/core/src/tools/read-file.test.ts',
-             'before': '        })),\n'
+                       '      const result = await invocation.execute(abortSignal);\n'
+                       "      expect(typeof result.llmContent).toBe('string');\n"
+                       "      expect(result.llmContent).toContain('Jupyter "
+                       "Notebook');\n"
+                       '      '
+                       'expect(result.llmContent).toContain(\'print("hello")\');\n'
+                       "      expect(result.llmContent).toContain('hello');\n"
+                       "      expect(result.returnDisplay).toBe('Read notebook: "
+                       "test.ipynb');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('records truncated notebook reads as not full', async "
+                       '() => {\n'
+                       "      const nbPath = path.join(tempRootDir, 'large.ipynb');\n"
+                       '      const notebook = {\n'
+                       '        cells: Array.from({ length: 200 }, (_, i) => ({\n'
+                       "          cell_type: 'code',\n"
+                       "          source: ['x = ' + 'a'.repeat(600) + '\\n'],\n"
+                       '          execution_count: i + 1,\n'
+                       "          outputs: [{ output_type: 'stream', text: ['result "
+                       "'.repeat(100)] }],\n"
+                       '          metadata: {},\n'
+                       '        })),\n'
                        "        metadata: { language_info: { name: 'python' } },\n"
                        '      };\n'
                        '      await fsp.writeFile(nbPath, JSON.stringify(notebook), '
@@ -1291397,63 +1290890,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "      expect(result.llmContent).toContain('remaining cells "
                        "truncated');\n"
                        "      expect(result.llmContent).not.toContain('Showing "
-                       "lines');\n",
-             'after': '        })),\n'
-                      "        metadata: { language_info: { name: 'python' } },\n"
-                      '      };\n'
-                      '      await fsp.writeFile(nbPath, JSON.stringify(notebook), '
-                      "'utf-8');\n"
-                      '      const invocation = tool.build({\n'
-                      '        file_path: nbPath,\n'
-                      '        offset: 0,\n'
-                      '      }) as ToolInvocation<ReadFileToolParams, ToolResult>;\n'
-                      '\n'
-                      '      const result = await invocation.execute(abortSignal);\n'
-                      "      expect(typeof result.llmContent).toBe('string');\n"
-                      "      expect(result.llmContent).toContain('remaining cells "
-                      "truncated');\n"
-                      "      expect(result.llmContent).not.toContain('Showing "
-                      "lines');\n",
-             'review_before': '        })),\n'
-                              "        metadata: { language_info: { name: 'python' } "
-                              '},\n'
-                              '      };\n'
-                              '      await fsp.writeFile(nbPath, '
-                              "JSON.stringify(notebook), 'utf-8');\n"
-                              '      const invocation = tool.build({\n'
-                              '        file_path: nbPath,\n'
-                              '      }) as ToolInvocation<ReadFileToolParams, '
-                              'ToolResult>;\n'
-                              '\n'
-                              '      const result = await '
-                              'invocation.execute(abortSignal);\n'
-                              "      expect(typeof result.llmContent).toBe('string');\n"
-                              "      expect(result.llmContent).toContain('remaining "
-                              "cells truncated');\n"
-                              "      expect(result.llmContent).not.toContain('Showing "
-                              "lines');\n",
-             'review_after': '        })),\n'
-                             "        metadata: { language_info: { name: 'python' } "
-                             '},\n'
-                             '      };\n'
-                             '      await fsp.writeFile(nbPath, '
-                             "JSON.stringify(notebook), 'utf-8');\n"
-                             '      const invocation = tool.build({\n'
-                             '        file_path: nbPath,\n'
-                             '        offset: 0,\n'
-                             '      }) as ToolInvocation<ReadFileToolParams, '
-                             'ToolResult>;\n'
-                             '\n'
-                             '      const result = await '
-                             'invocation.execute(abortSignal);\n'
-                             "      expect(typeof result.llmContent).toBe('string');\n"
-                             "      expect(result.llmContent).toContain('remaining "
-                             "cells truncated');\n"
-                             "      expect(result.llmContent).not.toContain('Showing "
-                             "lines');\n"},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-16',
-             'path': 'packages/core/src/tools/read-file.test.ts',
-             'before': "      if (status.state === 'fresh') {\n"
+                       "lines');\n"
+                       '\n'
+                       '      const status = '
+                       'fileReadCache.check(fs.statSync(nbPath));\n'
+                       "      expect(status.state).toBe('fresh');\n"
+                       "      if (status.state === 'fresh') {\n"
                        '        expect(status.entry.lastReadWasFull).toBe(false);\n'
                        '        expect(status.entry.lastReadCacheable).toBe(false);\n'
                        '      }\n'
@@ -1291512,7 +1290954,158 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '      const lines = Array.from({ length: 20 }, (_, i) => `Line '
                        '${i + 1}`);\n'
                        "      const fileContent = lines.join('\\n');\n",
-             'after': "      if (status.state === 'fresh') {\n"
+             'after': "          displayName: 'document.pdf',\n"
+                      '        },\n'
+                      '      });\n'
+                      "      expect(result.returnDisplay).toBe('Read pdf file: "
+                      "document.pdf');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should handle binary file and skip content', async () "
+                      '=> {\n'
+                      "      const binPath = path.join(tempRootDir, 'binary.bin');\n"
+                      '      // Binary data with null bytes\n'
+                      '      const binaryData = Buffer.from([0x00, 0xff, 0x00, '
+                      '0xff]);\n'
+                      '      await fsp.writeFile(binPath, binaryData);\n'
+                      '      const params: ReadFileToolParams = { file_path: binPath, '
+                      'offset: 0 };\n'
+                      '      const invocation = tool.build(params) as ToolInvocation<\n'
+                      '        ReadFileToolParams,\n'
+                      '        ToolResult\n'
+                      '      >;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      '      expect(result.llmContent).toBe(\n'
+                      "        'Cannot display content of binary file: binary.bin',\n"
+                      '      );\n'
+                      "      expect(result.returnDisplay).toBe('Skipped binary file: "
+                      "binary.bin');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should handle SVG file as text', async () => {\n"
+                      "      const svgPath = path.join(tempRootDir, 'image.svg');\n"
+                      '      const svgContent = \'<svg><circle cx="50" cy="50" '
+                      'r="40"/></svg>\';\n'
+                      "      await fsp.writeFile(svgPath, svgContent, 'utf-8');\n"
+                      '      const params: ReadFileToolParams = { file_path: svgPath, '
+                      'offset: 0 };\n'
+                      '      const invocation = tool.build(params) as ToolInvocation<\n'
+                      '        ReadFileToolParams,\n'
+                      '        ToolResult\n'
+                      '      >;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      '      expect(result.llmContent).toBe(svgContent);\n'
+                      "      expect(result.returnDisplay).toBe('Read SVG as text: "
+                      "image.svg');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('reads a large SVG whole, for the one bound on a tool "
+                      "result to hold', async () => {\n"
+                      "      const svgPath = path.join(tempRootDir, 'large.svg');\n"
+                      "      // Larger than 1MB: no size of this tool's own refuses "
+                      'it. The result\n'
+                      "      // is held to one inline block where the model's copy is "
+                      'made, and the\n'
+                      '      // whole of it is retained there to be read back a page '
+                      'at a time.\n'
+                      "      const largeContent = '<svg>' + 'x'.repeat(1024 * 1024 + "
+                      "1) + '</svg>';\n"
+                      "      await fsp.writeFile(svgPath, largeContent, 'utf-8');\n"
+                      '      const params: ReadFileToolParams = { file_path: svgPath, '
+                      'offset: 0 };\n'
+                      '      const invocation = tool.build(params) as ToolInvocation<\n'
+                      '        ReadFileToolParams,\n'
+                      '        ToolResult\n'
+                      '      >;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      '      expect(result.error).toBeUndefined();\n'
+                      '      expect(result.llmContent).toBe(largeContent);\n'
+                      "      expect(result.returnDisplay).toBe('Read SVG as text: "
+                      "large.svg');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should handle empty file', async () => {\n"
+                      "      const emptyPath = path.join(tempRootDir, 'empty.txt');\n"
+                      "      await fsp.writeFile(emptyPath, '', 'utf-8');\n"
+                      '      const params: ReadFileToolParams = { file_path: '
+                      'emptyPath, offset: 0 };\n'
+                      '      const invocation = tool.build(params) as ToolInvocation<\n'
+                      '        ReadFileToolParams,\n'
+                      '        ToolResult\n'
+                      '      >;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      "      expect(result.llmContent).toBe('');\n"
+                      "      expect(result.returnDisplay).toBe('');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should handle Jupyter notebook file', async () => {\n"
+                      "      const nbPath = path.join(tempRootDir, 'test.ipynb');\n"
+                      '      const notebook = {\n'
+                      '        cells: [\n'
+                      '          {\n'
+                      "            cell_type: 'code',\n"
+                      '            source: [\'print("hello")\'],\n'
+                      '            execution_count: 1,\n'
+                      "            outputs: [{ output_type: 'stream', text: "
+                      "['hello\\n'] }],\n"
+                      '            metadata: {},\n'
+                      '          },\n'
+                      '        ],\n'
+                      "        metadata: { language_info: { name: 'python' } },\n"
+                      '      };\n'
+                      '      await fsp.writeFile(nbPath, JSON.stringify(notebook), '
+                      "'utf-8');\n"
+                      '      const params: ReadFileToolParams = { file_path: nbPath, '
+                      'offset: 0 };\n'
+                      '      const invocation = tool.build(params) as ToolInvocation<\n'
+                      '        ReadFileToolParams,\n'
+                      '        ToolResult\n'
+                      '      >;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      "      expect(typeof result.llmContent).toBe('string');\n"
+                      "      expect(result.llmContent).toContain('Jupyter Notebook');\n"
+                      '      expect(result.llmContent).toContain(\'print("hello")\');\n'
+                      "      expect(result.llmContent).toContain('hello');\n"
+                      "      expect(result.returnDisplay).toBe('Read notebook: "
+                      "test.ipynb');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('records truncated notebook reads as not full', async () "
+                      '=> {\n'
+                      "      const nbPath = path.join(tempRootDir, 'large.ipynb');\n"
+                      '      const notebook = {\n'
+                      '        cells: Array.from({ length: 200 }, (_, i) => ({\n'
+                      "          cell_type: 'code',\n"
+                      "          source: ['x = ' + 'a'.repeat(600) + '\\n'],\n"
+                      '          execution_count: i + 1,\n'
+                      "          outputs: [{ output_type: 'stream', text: ['result "
+                      "'.repeat(100)] }],\n"
+                      '          metadata: {},\n'
+                      '        })),\n'
+                      "        metadata: { language_info: { name: 'python' } },\n"
+                      '      };\n'
+                      '      await fsp.writeFile(nbPath, JSON.stringify(notebook), '
+                      "'utf-8');\n"
+                      '      const invocation = tool.build({\n'
+                      '        file_path: nbPath,\n'
+                      '        offset: 0,\n'
+                      '      }) as ToolInvocation<ReadFileToolParams, ToolResult>;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      "      expect(typeof result.llmContent).toBe('string');\n"
+                      "      expect(result.llmContent).toContain('remaining cells "
+                      "truncated');\n"
+                      "      expect(result.llmContent).not.toContain('Showing "
+                      "lines');\n"
+                      '\n'
+                      '      const status = fileReadCache.check(fs.statSync(nbPath));\n'
+                      "      expect(status.state).toBe('fresh');\n"
+                      "      if (status.state === 'fresh') {\n"
                       '        expect(status.entry.lastReadWasFull).toBe(false);\n'
                       '        expect(status.entry.lastReadCacheable).toBe(false);\n'
                       '      }\n'
@@ -1291996,7 +1291589,602 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      const lines = Array.from({ length: 20 }, (_, i) => `Line '
                       '${i + 1}`);\n'
                       "      const fileContent = lines.join('\\n');\n",
-             'review_before': "      if (status.state === 'fresh') {\n"
+             'review_before': "          displayName: 'document.pdf',\n"
+                              '        },\n'
+                              '      });\n'
+                              "      expect(result.returnDisplay).toBe('Read pdf file: "
+                              "document.pdf');\n"
+                              '    });\n'
+                              '\n'
+                              "    describe('PDF vision bridge fallback', () => {\n"
+                              '      function createTextOnlyTool(): ReadFileTool {\n'
+                              '        return new ReadFileTool({\n'
+                              '          getFileService: () => new '
+                              'FileDiscoveryService(tempRootDir),\n'
+                              '          getFileSystemService: () => new '
+                              'StandardFileSystemService(),\n'
+                              '          getTargetDir: () => tempRootDir,\n'
+                              '          getWorkspaceContext: () => '
+                              'createMockWorkspaceContext(tempRootDir),\n'
+                              "          getModel: () => 'text-only-model',\n"
+                              '          getEffectiveInputModalities: () => ({}),\n'
+                              '          getDefaultVisionBridgeModel: () => ({\n'
+                              "            id: 'qwen3-vl-plus',\n"
+                              '            baseUrl: '
+                              "'https://dashscope.aliyuncs.com/v1',\n"
+                              '          }),\n'
+                              '          storage: {\n'
+                              '            getProjectTempDir: () => '
+                              "path.join(tempRootDir, '.temp'),\n"
+                              '            getProjectDir: () => path.join(tempRootDir, '
+                              "'.project'),\n"
+                              '            getUserSkillsDirs: () => [\n'
+                              "              path.join(os.homedir(), '.qwen', "
+                              "'skills'),\n"
+                              '            ],\n'
+                              '          },\n'
+                              '          getTruncateToolOutputThreshold: () => 2500,\n'
+                              '          getTruncateToolOutputLines: () => 500,\n'
+                              '          getContentGeneratorConfig: () => ({ '
+                              'modalities: {} }),\n'
+                              '          getFileReadCache: () => fileReadCache,\n'
+                              '          getFileReadCacheDisabled: () => false,\n'
+                              '        } as unknown as Config);\n'
+                              '      }\n'
+                              '\n'
+                              '      async function readCandidate(\n'
+                              '        signalOverride: AbortSignal = abortSignal,\n'
+                              '      ): Promise<ToolResult> {\n'
+                              '        const pdfPath = path.join(tempRootDir, '
+                              "'scanned.pdf');\n"
+                              '        await fsp.writeFile(pdfPath, '
+                              "Buffer.from('%PDF-1.7'));\n"
+                              '        const invocation = '
+                              'createTextOnlyTool().build({\n'
+                              '          file_path: pdfPath,\n'
+                              "          pages: '20-25',\n"
+                              '        }) as ToolInvocation<ReadFileToolParams, '
+                              'ToolResult>;\n'
+                              '        return invocation.execute(signalOverride);\n'
+                              '      }\n'
+                              '\n'
+                              '      function bridgeDisplay(result: ToolResult): '
+                              'VisionBridgeNoticeDisplay {\n'
+                              '        expect(result.returnDisplay).toMatchObject({\n'
+                              "          type: 'vision_bridge_notice',\n"
+                              '        });\n'
+                              '        return result.returnDisplay as '
+                              'VisionBridgeNoticeDisplay;\n'
+                              '      }\n'
+                              '\n'
+                              '      beforeEach(() => {\n'
+                              '        '
+                              'visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);\n'
+                              '        '
+                              'pdfMocks.renderPDFPagesToImages.mockResolvedValue({\n'
+                              '          success: true,\n'
+                              "          images: ['20', '21', '22', '23'].map((data) "
+                              '=> ({\n'
+                              '            data,\n'
+                              "            mimeType: 'image/jpeg',\n"
+                              '          })),\n'
+                              '          bytesTruncated: false,\n'
+                              '        });\n'
+                              '      });\n'
+                              '\n'
+                              "      it('replaces candidate images with an untrusted "
+                              "transcription before returning', async () => {\n"
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '          applied: true,\n'
+                              "          status: 'ok',\n"
+                              '          parts: [\n'
+                              '            {\n'
+                              "              text: '[Untrusted transcription]\\nPage "
+                              '20: heading\\nPages 24-25 exist but were not '
+                              'transcribed; call read_file on the original PDF with a '
+                              "later page range to continue.',\n"
+                              '            },\n'
+                              '          ],\n'
+                              '          convertedCount: 4,\n'
+                              '          omittedCount: 0,\n'
+                              "          modelId: 'qwen3-vl-plus',\n"
+                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
+                              '          egressOccurred: true,\n'
+                              '        });\n'
+                              '\n'
+                              '        const result = await readCandidate();\n'
+                              '\n'
+                              '        expect(result.error).toBeUndefined();\n'
+                              '        '
+                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
+                              '        '
+                              'expect(JSON.stringify(result.llmContent)).toContain(\n'
+                              "          'Untrusted transcription',\n"
+                              '        );\n'
+                              '        '
+                              'expect(JSON.stringify(result.llmContent)).toContain(\n'
+                              "          'Pages 24-25 exist but were not "
+                              "transcribed',\n"
+                              '        );\n'
+                              '        '
+                              'expect(JSON.stringify(result.llmContent)).not.toContain(\n'
+                              "          'pages 24-25 were not included',\n"
+                              '        );\n'
+                              '        const display = bridgeDisplay(result);\n'
+                              '        expect(display.summary).toContain(\n'
+                              "          'transcribed PDF pages 20-23; remaining pages "
+                              "24-25',\n"
+                              '        );\n'
+                              '        '
+                              "expect(display.notice).toContain('qwen3-vl-plus');\n"
+                              '        '
+                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"
+                              '        '
+                              'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
+                              '          expect.objectContaining({\n'
+                              '            sourceContext: {\n'
+                              "              displayName: 'scanned.pdf',\n"
+                              '              renderedRange: { firstPage: 20, lastPage: '
+                              '23 },\n'
+                              '              continuation: {\n'
+                              "                certainty: 'known',\n"
+                              '                firstPage: 24,\n'
+                              '                lastPage: 25,\n'
+                              '              },\n'
+                              '            },\n'
+                              '          }),\n'
+                              '        );\n'
+                              '        const sentParts = '
+                              'visionBridgeMocks.runVisionBridge.mock.calls[0][0]\n'
+                              '          .parts as Array<{ inlineData?: unknown; '
+                              'text?: string }>;\n'
+                              '        expect(sentParts).toHaveLength(4);\n'
+                              '        expect(sentParts.every((part) => '
+                              'part.inlineData)).toBe(true);\n'
+                              '      });\n'
+                              '\n'
+                              "      it('does not present unknown continuation pages "
+                              "as certain', async () => {\n"
+                              '        '
+                              'pdfMocks.getPDFPageCount.mockResolvedValue(null);\n'
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '          applied: true,\n'
+                              "          status: 'ok',\n"
+                              "          parts: [{ text: '[Untrusted "
+                              "transcription]\\nPage 20: heading' }],\n"
+                              '          convertedCount: 4,\n'
+                              '          omittedCount: 0,\n'
+                              "          modelId: 'qwen3-vl-plus',\n"
+                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
+                              '          egressOccurred: true,\n'
+                              '        });\n'
+                              '\n'
+                              '        const result = await readCandidate();\n'
+                              '\n'
+                              '        const display = bridgeDisplay(result);\n'
+                              '        expect(display.summary).toContain(\n'
+                              "          'additional pages may exist from page 24 "
+                              "through page 25',\n"
+                              '        );\n'
+                              '        '
+                              "expect(display.summary).not.toContain('remaining pages "
+                              "24-25');\n"
+                              '        '
+                              'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
+                              '          expect.objectContaining({\n'
+                              '            sourceContext: expect.objectContaining({\n'
+                              '              continuation: {\n'
+                              "                certainty: 'possible',\n"
+                              '                firstPage: 24,\n'
+                              '                requestedLastPage: 25,\n'
+                              '              },\n'
+                              '            }),\n'
+                              '          }),\n'
+                              '        );\n'
+                              '      });\n'
+                              '\n'
+                              '      it.each([\n'
+                              "        ['request failure', 'the vision model request "
+                              "failed'],\n"
+                              "        ['empty response', 'the vision model returned "
+                              "no description'],\n"
+                              "        ['timeout', 'timed out after 30000ms'],\n"
+                              "        ['model selection changed', 'no image-capable "
+                              "model is available'],\n"
+                              "      ])('restores the original PDF error after %s', "
+                              'async (_name, error) => {\n'
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '          applied: true,\n'
+                              "          status: 'failed',\n"
+                              '          convertedCount: 0,\n'
+                              '          omittedCount: 0,\n'
+                              "          modelId: 'qwen3-vl-plus',\n"
+                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
+                              '          egressOccurred: true,\n'
+                              '          error,\n'
+                              '        });\n'
+                              '\n'
+                              '        const result = await readCandidate();\n'
+                              '\n'
+                              '        '
+                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                              "        expect(result.error?.message).toBe('No "
+                              "extractable text layer.');\n"
+                              "        expect(result.llmContent).toContain('Cannot "
+                              "extract text from PDF');\n"
+                              '        '
+                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
+                              "        expect(result.llmContent).not.toContain('Vision "
+                              "bridge');\n"
+                              '        const display = bridgeDisplay(result);\n'
+                              '        expect(display.summary).toContain(\n'
+                              "          'rendered PDF pages 20-23; remaining pages "
+                              "24-25',\n"
+                              '        );\n'
+                              '        '
+                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"
+                              '      });\n'
+                              '\n'
+                              "      it('restores the PDF error for an unusable "
+                              "successful bridge result', async () => {\n"
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '          applied: false,\n'
+                              "          status: 'ok',\n"
+                              '          convertedCount: 4,\n'
+                              '          omittedCount: 0,\n'
+                              "          modelId: 'qwen3-vl-plus',\n"
+                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
+                              '          egressOccurred: true,\n'
+                              '        });\n'
+                              '\n'
+                              '        const result = await readCandidate();\n'
+                              '\n'
+                              '        '
+                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                              '        '
+                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
+                              '        '
+                              'expect(bridgeDisplay(result).notice).toContain(\n'
+                              "          'dashscope.aliyuncs.com',\n"
+                              '        );\n'
+                              '      });\n'
+                              '\n'
+                              '      it.each([\n'
+                              '        [\n'
+                              "          'inlineData',\n"
+                              "          { inlineData: { data: 'unsafe', mimeType: "
+                              "'application/pdf' } },\n"
+                              '        ],\n'
+                              '        [\n'
+                              "          'fileData',\n"
+                              '          {\n'
+                              '            fileData: {\n'
+                              "              fileUri: 'file:///tmp/unsafe.pdf',\n"
+                              "              mimeType: 'application/pdf',\n"
+                              '            },\n'
+                              '          },\n'
+                              '        ],\n'
+                              '      ])(\n'
+                              "        'fails closed when a successful bridge result "
+                              "still contains %s',\n"
+                              '        async (mediaKey, mediaPart) => {\n'
+                              '          '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '            applied: true,\n'
+                              "            status: 'ok',\n"
+                              '            parts: [mediaPart],\n'
+                              '            convertedCount: 4,\n'
+                              '            omittedCount: 0,\n'
+                              "            modelId: 'qwen3-vl-plus',\n"
+                              "            modelEndpoint: 'dashscope.aliyuncs.com',\n"
+                              '            egressOccurred: true,\n'
+                              '          });\n'
+                              '\n'
+                              '          const result = await readCandidate();\n'
+                              '\n'
+                              '          '
+                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                              "          expect(result.llmContent).toContain('Cannot "
+                              "extract text from PDF');\n"
+                              '          '
+                              'expect(JSON.stringify(result.llmContent)).not.toContain(mediaKey);\n'
+                              '          const display = bridgeDisplay(result);\n'
+                              '          '
+                              "expect(display.notice).toContain('qwen3-vl-plus');\n"
+                              '          '
+                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"
+                              '          '
+                              "expect(display.notice).toContain('transcription was "
+                              "discarded');\n"
+                              "          expect(display.notice).not.toContain('vision "
+                              "model request failed');\n"
+                              '        },\n'
+                              '      );\n'
+                              '\n'
+                              "      it('restores the PDF error when the bridge omits "
+                              "a rendered page', async () => {\n"
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '          applied: true,\n'
+                              "          status: 'ok',\n"
+                              "          parts: [{ text: '[Untrusted "
+                              "transcription]\\nPages 20-22' }],\n"
+                              '          convertedCount: 3,\n'
+                              '          omittedCount: 1,\n'
+                              "          modelId: 'qwen3-vl-plus',\n"
+                              "          modelEndpoint: 'dashscope.aliyuncs.com',\n"
+                              '          egressOccurred: true,\n'
+                              '        });\n'
+                              '\n'
+                              '        const result = await readCandidate();\n'
+                              '\n'
+                              '        '
+                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                              "        expect(result.llmContent).toContain('Cannot "
+                              "extract text from PDF');\n"
+                              '        '
+                              'expect(bridgeDisplay(result).notice).toContain(\n'
+                              "          'dashscope.aliyuncs.com',\n"
+                              '        );\n'
+                              '        '
+                              'expect(bridgeDisplay(result).notice).toContain(\n'
+                              "          'transcription was discarded',\n"
+                              '        );\n'
+                              '        '
+                              'expect(bridgeDisplay(result).notice).not.toContain(\n'
+                              "          'vision model request failed',\n"
+                              '        );\n'
+                              '        '
+                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
+                              '      });\n'
+                              '\n'
+                              "      it('restores the PDF error when the bridge throws "
+                              "before replacement', async () => {\n"
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockRejectedValue(\n'
+                              "          new Error('network failure'),\n"
+                              '        );\n'
+                              '\n'
+                              '        const result = await readCandidate();\n'
+                              '\n'
+                              '        '
+                              'expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                              "        expect(result.error?.message).toBe('No "
+                              "extractable text layer.');\n"
+                              "        expect(result.llmContent).toContain('Cannot "
+                              "extract text from PDF');\n"
+                              '        '
+                              "expect(JSON.stringify(result.llmContent)).not.toContain('inlineData');\n"
+                              '        '
+                              'expect(bridgeDisplay(result).notice).toContain(\n'
+                              "          'failed before producing a transcription',\n"
+                              '        );\n'
+                              '      });\n'
+                              '\n'
+                              "      it('propagates cancellation instead of restoring "
+                              "a PDF error', async () => {\n"
+                              '        const controller = new AbortController();\n'
+                              '        '
+                              'visionBridgeMocks.runVisionBridge.mockImplementation(async '
+                              '() => {\n'
+                              '          controller.abort();\n'
+                              '          return {\n'
+                              '            applied: false,\n'
+                              "            status: 'skipped',\n"
+                              '            convertedCount: 0,\n'
+                              '            omittedCount: 0,\n'
+                              "            modelId: 'qwen3-vl-plus',\n"
+                              '          };\n'
+                              '        });\n'
+                              '\n'
+                              '        await '
+                              'expect(readCandidate(controller.signal)).rejects.toThrow(\n'
+                              '          /abort/i,\n'
+                              '        );\n'
+                              '      });\n'
+                              '\n'
+                              "      it('preserves ordinary images for the shared "
+                              "tool-result bridge', async () => {\n"
+                              '        const imagePath = path.join(tempRootDir, '
+                              "'image.png');\n"
+                              '        await fsp.writeFile(\n'
+                              '          imagePath,\n'
+                              '          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, '
+                              '0x0a, 0x1a, 0x0a]),\n'
+                              '        );\n'
+                              '        const invocation = '
+                              'createTextOnlyTool().build({\n'
+                              '          file_path: imagePath,\n'
+                              '        }) as ToolInvocation<ReadFileToolParams, '
+                              'ToolResult>;\n'
+                              '\n'
+                              '        const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              '\n'
+                              '        expect(result.llmContent).toMatchObject({\n'
+                              '          inlineData: {\n'
+                              "            mimeType: 'image/png',\n"
+                              "            displayName: 'image.png',\n"
+                              '          },\n'
+                              '        });\n'
+                              '        '
+                              'expect(visionBridgeMocks.runVisionBridge).not.toHaveBeenCalled();\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should handle binary file and skip content', "
+                              'async () => {\n'
+                              '      const binPath = path.join(tempRootDir, '
+                              "'binary.bin');\n"
+                              '      // Binary data with null bytes\n'
+                              '      const binaryData = Buffer.from([0x00, 0xff, 0x00, '
+                              '0xff]);\n'
+                              '      await fsp.writeFile(binPath, binaryData);\n'
+                              '      const params: ReadFileToolParams = { file_path: '
+                              'binPath };\n'
+                              '      const invocation = tool.build(params) as '
+                              'ToolInvocation<\n'
+                              '        ReadFileToolParams,\n'
+                              '        ToolResult\n'
+                              '      >;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              '      expect(result.llmContent).toBe(\n'
+                              "        'Cannot display content of binary file: "
+                              "binary.bin',\n"
+                              '      );\n'
+                              "      expect(result.returnDisplay).toBe('Skipped binary "
+                              "file: binary.bin');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should handle SVG file as text', async () => {\n"
+                              '      const svgPath = path.join(tempRootDir, '
+                              "'image.svg');\n"
+                              '      const svgContent = \'<svg><circle cx="50" cy="50" '
+                              'r="40"/></svg>\';\n'
+                              '      await fsp.writeFile(svgPath, svgContent, '
+                              "'utf-8');\n"
+                              '      const params: ReadFileToolParams = { file_path: '
+                              'svgPath };\n'
+                              '      const invocation = tool.build(params) as '
+                              'ToolInvocation<\n'
+                              '        ReadFileToolParams,\n'
+                              '        ToolResult\n'
+                              '      >;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              '      expect(result.llmContent).toBe(svgContent);\n'
+                              "      expect(result.returnDisplay).toBe('Read SVG as "
+                              "text: image.svg');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should handle large SVG file', async () => {\n"
+                              '      const svgPath = path.join(tempRootDir, '
+                              "'large.svg');\n"
+                              '      // Create SVG content larger than 1MB\n'
+                              "      const largeContent = '<svg>' + 'x'.repeat(1024 * "
+                              "1024 + 1) + '</svg>';\n"
+                              '      await fsp.writeFile(svgPath, largeContent, '
+                              "'utf-8');\n"
+                              '      const params: ReadFileToolParams = { file_path: '
+                              'svgPath };\n'
+                              '      const invocation = tool.build(params) as '
+                              'ToolInvocation<\n'
+                              '        ReadFileToolParams,\n'
+                              '        ToolResult\n'
+                              '      >;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              '      expect(result.llmContent).toBe(\n'
+                              "        'Cannot display content of SVG file larger than "
+                              "1MB: large.svg',\n"
+                              '      );\n'
+                              '      expect(result.returnDisplay).toBe(\n'
+                              "        'Skipped large SVG file (>1MB): large.svg',\n"
+                              '      );\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should handle empty file', async () => {\n"
+                              '      const emptyPath = path.join(tempRootDir, '
+                              "'empty.txt');\n"
+                              "      await fsp.writeFile(emptyPath, '', 'utf-8');\n"
+                              '      const params: ReadFileToolParams = { file_path: '
+                              'emptyPath };\n'
+                              '      const invocation = tool.build(params) as '
+                              'ToolInvocation<\n'
+                              '        ReadFileToolParams,\n'
+                              '        ToolResult\n'
+                              '      >;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              "      expect(result.llmContent).toBe('');\n"
+                              "      expect(result.returnDisplay).toBe('');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should handle Jupyter notebook file', async () "
+                              '=> {\n'
+                              '      const nbPath = path.join(tempRootDir, '
+                              "'test.ipynb');\n"
+                              '      const notebook = {\n'
+                              '        cells: [\n'
+                              '          {\n'
+                              "            cell_type: 'code',\n"
+                              '            source: [\'print("hello")\'],\n'
+                              '            execution_count: 1,\n'
+                              "            outputs: [{ output_type: 'stream', text: "
+                              "['hello\\n'] }],\n"
+                              '            metadata: {},\n'
+                              '          },\n'
+                              '        ],\n'
+                              "        metadata: { language_info: { name: 'python' } "
+                              '},\n'
+                              '      };\n'
+                              '      await fsp.writeFile(nbPath, '
+                              "JSON.stringify(notebook), 'utf-8');\n"
+                              '      const params: ReadFileToolParams = { file_path: '
+                              'nbPath };\n'
+                              '      const invocation = tool.build(params) as '
+                              'ToolInvocation<\n'
+                              '        ReadFileToolParams,\n'
+                              '        ToolResult\n'
+                              '      >;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              "      expect(typeof result.llmContent).toBe('string');\n"
+                              "      expect(result.llmContent).toContain('Jupyter "
+                              "Notebook');\n"
+                              '      '
+                              'expect(result.llmContent).toContain(\'print("hello")\');\n'
+                              "      expect(result.llmContent).toContain('hello');\n"
+                              "      expect(result.returnDisplay).toBe('Read notebook: "
+                              "test.ipynb');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('records truncated notebook reads as not full', "
+                              'async () => {\n'
+                              '      const nbPath = path.join(tempRootDir, '
+                              "'large.ipynb');\n"
+                              '      const notebook = {\n'
+                              '        cells: Array.from({ length: 200 }, (_, i) => '
+                              '({\n'
+                              "          cell_type: 'code',\n"
+                              "          source: ['x = ' + 'a'.repeat(600) + '\\n'],\n"
+                              '          execution_count: i + 1,\n'
+                              "          outputs: [{ output_type: 'stream', text: "
+                              "['result '.repeat(100)] }],\n"
+                              '          metadata: {},\n'
+                              '        })),\n'
+                              "        metadata: { language_info: { name: 'python' } "
+                              '},\n'
+                              '      };\n'
+                              '      await fsp.writeFile(nbPath, '
+                              "JSON.stringify(notebook), 'utf-8');\n"
+                              '      const invocation = tool.build({\n'
+                              '        file_path: nbPath,\n'
+                              '      }) as ToolInvocation<ReadFileToolParams, '
+                              'ToolResult>;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              "      expect(typeof result.llmContent).toBe('string');\n"
+                              "      expect(result.llmContent).toContain('remaining "
+                              "cells truncated');\n"
+                              "      expect(result.llmContent).not.toContain('Showing "
+                              "lines');\n"
+                              '\n'
+                              '      const status = '
+                              'fileReadCache.check(fs.statSync(nbPath));\n'
+                              "      expect(status.state).toBe('fresh');\n"
+                              "      if (status.state === 'fresh') {\n"
                               '        '
                               'expect(status.entry.lastReadWasFull).toBe(false);\n'
                               '        '
@@ -1292060,7 +1292248,185 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '      const lines = Array.from({ length: 20 }, (_, i) '
                               '=> `Line ${i + 1}`);\n'
                               "      const fileContent = lines.join('\\n');\n",
-             'review_after': "      if (status.state === 'fresh') {\n"
+             'review_after': "          displayName: 'document.pdf',\n"
+                             '        },\n'
+                             '      });\n'
+                             "      expect(result.returnDisplay).toBe('Read pdf file: "
+                             "document.pdf');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('should handle binary file and skip content', "
+                             'async () => {\n'
+                             '      const binPath = path.join(tempRootDir, '
+                             "'binary.bin');\n"
+                             '      // Binary data with null bytes\n'
+                             '      const binaryData = Buffer.from([0x00, 0xff, 0x00, '
+                             '0xff]);\n'
+                             '      await fsp.writeFile(binPath, binaryData);\n'
+                             '      const params: ReadFileToolParams = { file_path: '
+                             'binPath, offset: 0 };\n'
+                             '      const invocation = tool.build(params) as '
+                             'ToolInvocation<\n'
+                             '        ReadFileToolParams,\n'
+                             '        ToolResult\n'
+                             '      >;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             '      expect(result.llmContent).toBe(\n'
+                             "        'Cannot display content of binary file: "
+                             "binary.bin',\n"
+                             '      );\n'
+                             "      expect(result.returnDisplay).toBe('Skipped binary "
+                             "file: binary.bin');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('should handle SVG file as text', async () => {\n"
+                             '      const svgPath = path.join(tempRootDir, '
+                             "'image.svg');\n"
+                             '      const svgContent = \'<svg><circle cx="50" cy="50" '
+                             'r="40"/></svg>\';\n'
+                             '      await fsp.writeFile(svgPath, svgContent, '
+                             "'utf-8');\n"
+                             '      const params: ReadFileToolParams = { file_path: '
+                             'svgPath, offset: 0 };\n'
+                             '      const invocation = tool.build(params) as '
+                             'ToolInvocation<\n'
+                             '        ReadFileToolParams,\n'
+                             '        ToolResult\n'
+                             '      >;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             '      expect(result.llmContent).toBe(svgContent);\n'
+                             "      expect(result.returnDisplay).toBe('Read SVG as "
+                             "text: image.svg');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('reads a large SVG whole, for the one bound on a "
+                             "tool result to hold', async () => {\n"
+                             '      const svgPath = path.join(tempRootDir, '
+                             "'large.svg');\n"
+                             "      // Larger than 1MB: no size of this tool's own "
+                             'refuses it. The result\n'
+                             "      // is held to one inline block where the model's "
+                             'copy is made, and the\n'
+                             '      // whole of it is retained there to be read back a '
+                             'page at a time.\n'
+                             "      const largeContent = '<svg>' + 'x'.repeat(1024 * "
+                             "1024 + 1) + '</svg>';\n"
+                             '      await fsp.writeFile(svgPath, largeContent, '
+                             "'utf-8');\n"
+                             '      const params: ReadFileToolParams = { file_path: '
+                             'svgPath, offset: 0 };\n'
+                             '      const invocation = tool.build(params) as '
+                             'ToolInvocation<\n'
+                             '        ReadFileToolParams,\n'
+                             '        ToolResult\n'
+                             '      >;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             '      expect(result.error).toBeUndefined();\n'
+                             '      expect(result.llmContent).toBe(largeContent);\n'
+                             "      expect(result.returnDisplay).toBe('Read SVG as "
+                             "text: large.svg');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('should handle empty file', async () => {\n"
+                             '      const emptyPath = path.join(tempRootDir, '
+                             "'empty.txt');\n"
+                             "      await fsp.writeFile(emptyPath, '', 'utf-8');\n"
+                             '      const params: ReadFileToolParams = { file_path: '
+                             'emptyPath, offset: 0 };\n'
+                             '      const invocation = tool.build(params) as '
+                             'ToolInvocation<\n'
+                             '        ReadFileToolParams,\n'
+                             '        ToolResult\n'
+                             '      >;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             "      expect(result.llmContent).toBe('');\n"
+                             "      expect(result.returnDisplay).toBe('');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('should handle Jupyter notebook file', async () "
+                             '=> {\n'
+                             '      const nbPath = path.join(tempRootDir, '
+                             "'test.ipynb');\n"
+                             '      const notebook = {\n'
+                             '        cells: [\n'
+                             '          {\n'
+                             "            cell_type: 'code',\n"
+                             '            source: [\'print("hello")\'],\n'
+                             '            execution_count: 1,\n'
+                             "            outputs: [{ output_type: 'stream', text: "
+                             "['hello\\n'] }],\n"
+                             '            metadata: {},\n'
+                             '          },\n'
+                             '        ],\n'
+                             "        metadata: { language_info: { name: 'python' } "
+                             '},\n'
+                             '      };\n'
+                             '      await fsp.writeFile(nbPath, '
+                             "JSON.stringify(notebook), 'utf-8');\n"
+                             '      const params: ReadFileToolParams = { file_path: '
+                             'nbPath, offset: 0 };\n'
+                             '      const invocation = tool.build(params) as '
+                             'ToolInvocation<\n'
+                             '        ReadFileToolParams,\n'
+                             '        ToolResult\n'
+                             '      >;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             "      expect(typeof result.llmContent).toBe('string');\n"
+                             "      expect(result.llmContent).toContain('Jupyter "
+                             "Notebook');\n"
+                             '      '
+                             'expect(result.llmContent).toContain(\'print("hello")\');\n'
+                             "      expect(result.llmContent).toContain('hello');\n"
+                             "      expect(result.returnDisplay).toBe('Read notebook: "
+                             "test.ipynb');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('records truncated notebook reads as not full', "
+                             'async () => {\n'
+                             '      const nbPath = path.join(tempRootDir, '
+                             "'large.ipynb');\n"
+                             '      const notebook = {\n'
+                             '        cells: Array.from({ length: 200 }, (_, i) => ({\n'
+                             "          cell_type: 'code',\n"
+                             "          source: ['x = ' + 'a'.repeat(600) + '\\n'],\n"
+                             '          execution_count: i + 1,\n'
+                             "          outputs: [{ output_type: 'stream', text: "
+                             "['result '.repeat(100)] }],\n"
+                             '          metadata: {},\n'
+                             '        })),\n'
+                             "        metadata: { language_info: { name: 'python' } "
+                             '},\n'
+                             '      };\n'
+                             '      await fsp.writeFile(nbPath, '
+                             "JSON.stringify(notebook), 'utf-8');\n"
+                             '      const invocation = tool.build({\n'
+                             '        file_path: nbPath,\n'
+                             '        offset: 0,\n'
+                             '      }) as ToolInvocation<ReadFileToolParams, '
+                             'ToolResult>;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             "      expect(typeof result.llmContent).toBe('string');\n"
+                             "      expect(result.llmContent).toContain('remaining "
+                             "cells truncated');\n"
+                             "      expect(result.llmContent).not.toContain('Showing "
+                             "lines');\n"
+                             '\n'
+                             '      const status = '
+                             'fileReadCache.check(fs.statSync(nbPath));\n'
+                             "      expect(status.state).toBe('fresh');\n"
+                             "      if (status.state === 'fresh') {\n"
                              '        '
                              'expect(status.entry.lastReadWasFull).toBe(false);\n'
                              '        '
@@ -1292586,7 +1292952,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const lines = Array.from({ length: 20 }, (_, i) => '
                              '`Line ${i + 1}`);\n'
                              "      const fileContent = lines.join('\\n');\n"},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-17',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-13',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '        ReadFileToolParams,\n'
                        '        ToolResult\n'
@@ -1292642,7 +1293008,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      expect(result.llmContent).toContain('Line 8');\n"
                              '      expect(result.returnDisplay).toBe(\n'
                              "        'Read lines 6-8 of 20 from paginated.txt',\n"},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-18',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-14',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': "      const tempDir = path.join(tempRootDir, '.temp');\n"
                        '      await fsp.mkdir(tempDir, { recursive: true });\n'
@@ -1292829,7 +1293195,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '        const result = await '
                              'invocation.execute(abortSignal);\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-19',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-15',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '            getProjectTempDir: () => path.join(tempRootDir, '
                        "'.temp'),\n"
@@ -1293558,7 +1293924,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          offset: 1,\n'
                              '          limit: 2,\n'
                              '        });\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-20',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-16',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': "      it('does not arm the placeholder if the first Read was "
                        "truncated', async () => {\n"
@@ -1293911,7 +1294277,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "follow-up Edit can pass enforcement', async () => {\n"
                              '        // Auto-memory files skip the file_unchanged '
                              'fast-path (they\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-21',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-17',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '          clearAutoMemoryRootCache();\n'
                        '          const memRoot = getAutoMemoryRoot(tempRootDir);\n'
@@ -1294000,7 +1294366,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'prior-read\n'
                              '          // enforcement on Edit / WriteFile (fresh + '
                              'lastReadAt set +\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-22',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-18',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '        await fsp.writeFile(\n'
                        '          svgPath,\n'
@@ -1294077,7 +1294443,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'WriteFile would\n'
                              '        // recognise it as the model having seen the '
                              'bytes.\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-23',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-19',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '        // `read_file(file_path)` without offset/limit but on '
                        'a file\n'
@@ -1294201,7 +1294567,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          // Truncated → model has not seen every byte.\n'
                              '          '
                              'expect(status.entry.lastReadWasFull).toBe(false);\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-24',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-20',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '        // content to a `.cpp` file. The test relies on the\n'
                        '        // extension override winning over any future '
@@ -1294282,7 +1294648,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'fileReadCache.check(fs.statSync(filePath));\n'
                              "        expect(status.state).toBe('fresh');\n"
                              "        if (status.state === 'fresh') {\n"},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-25',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-21',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': "            background: '#306090',\n"
                        '          },\n'
@@ -1294374,7 +1294740,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "getFileReadCacheDisabled() is true', async () => {\n"
                              '        // Build a fresh ReadFileTool with a Config '
                              'whose cache is\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-26',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-22',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '            getProjectTempDir: () => path.join(tempRootDir, '
                        "'.temp'),\n"
@@ -1294528,7 +1294894,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'since/);\n'
                              '        expect(isolatedCache.size()).toBe(0);\n'
                              '      });\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-27',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-23',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '\n'
                        "      it('should throw error if path is ignored by a "
@@ -1294606,7 +1294972,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "      it('should throw error if path is ignored by "
                              ".agentignore or .aiignore', async () => {\n"},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-28',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-24',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '        );\n'
                        '        const agentIgnoredFilePath = path.join(tempRootDir, '
@@ -1294708,7 +1295074,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        await fsp.writeFile(\n'
                              "          path.join(tempRootDir, '.cursorignore'),\n"
                              "          'cursor-secret.txt\\n',\n"},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-29',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-25',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '            getProjectTempDir: () => path.join(tempRootDir, '
                        "'.temp'),\n"
@@ -1295902,22 +1296268,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'file continues,\n'
                       ' * counted or still being counted, with the call that reads on, '
                       'or that it\n'
-                      ' * ends -- and, for a memory file, the widest staleness note '
-                      'that leads it,\n'
-                      ' * each counted by the served tokenizer. Every number in them '
+                      ' * ends -- and less `note`, the staleness note the read leads a '
+                      "memory file's\n"
+                      " * page with ('' for any other file and for a memory a day old "
+                      'or less), each\n'
+                      ' * counted by the served tokenizer. Every number in a statement '
                       'takes the most\n'
-                      ' * digits a number here can have, and the call carries the '
-                      "caller's own\n"
-                      ' * `limit`. The page and what leads it are then counted '
-                      'together where the\n'
-                      ' * read composes them, so this is where a page starts, not what '
-                      'it is held to.\n'
+                      ' * digits a number here can have, since the page it leads is '
+                      'not yet read, and\n'
+                      " * the call carries the caller's own `limit`; the note is the "
+                      'very text the\n'
+                      " * read composes, since the file's age is known before its page "
+                      'is. The page\n'
+                      ' * and what leads it are then counted together where the read '
+                      'composes them,\n'
+                      ' * so this is where a page starts, not what it is held to.\n'
                       ' */\n'
                       'export async function readPageTokens(\n'
                       '  maxTokens: number,\n'
                       '  filePath: string,\n'
                       '  limit: number | undefined,\n'
-                      '  isAutoMem: boolean,\n'
+                      '  note: string,\n'
                       '  count: (text: string) => Promise<number>,\n'
                       '): Promise<number> {\n'
                       '  const most = Number.MAX_SAFE_INTEGER;\n'
@@ -1295946,11 +1296317,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      await count(tokenizerText(statement).text),\n'
                       '    );\n'
                       '  }\n'
-                      '  const widestNote = isAutoMem\n'
-                      '    ? await '
-                      'count(tokenizerText(memoryFreshnessNote(-most)).text)\n'
-                      '    : 0;\n'
-                      '  return maxTokens - widestStatement - widestNote;\n'
+                      '  const noteTokens = note ? await '
+                      'count(tokenizerText(note).text) : 0;\n'
+                      '  return maxTokens - widestStatement - noteTokens;\n'
                       '}\n'
                       "import { createDebugLogger } from '../utils/debugLogger.js';\n"
                       'import { getFileReadDefaultPermission } from '
@@ -1296268,22 +1296637,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'that the file continues,\n'
                              ' * counted or still being counted, with the call that '
                              'reads on, or that it\n'
-                             ' * ends -- and, for a memory file, the widest staleness '
-                             'note that leads it,\n'
-                             ' * each counted by the served tokenizer. Every number in '
-                             'them takes the most\n'
-                             ' * digits a number here can have, and the call carries '
-                             "the caller's own\n"
-                             ' * `limit`. The page and what leads it are then counted '
-                             'together where the\n'
-                             ' * read composes them, so this is where a page starts, '
-                             'not what it is held to.\n'
+                             ' * ends -- and less `note`, the staleness note the read '
+                             "leads a memory file's\n"
+                             " * page with ('' for any other file and for a memory a "
+                             'day old or less), each\n'
+                             ' * counted by the served tokenizer. Every number in a '
+                             'statement takes the most\n'
+                             ' * digits a number here can have, since the page it '
+                             'leads is not yet read, and\n'
+                             " * the call carries the caller's own `limit`; the note "
+                             'is the very text the\n'
+                             " * read composes, since the file's age is known before "
+                             'its page is. The page\n'
+                             ' * and what leads it are then counted together where the '
+                             'read composes them,\n'
+                             ' * so this is where a page starts, not what it is held '
+                             'to.\n'
                              ' */\n'
                              'export async function readPageTokens(\n'
                              '  maxTokens: number,\n'
                              '  filePath: string,\n'
                              '  limit: number | undefined,\n'
-                             '  isAutoMem: boolean,\n'
+                             '  note: string,\n'
                              '  count: (text: string) => Promise<number>,\n'
                              '): Promise<number> {\n'
                              '  const most = Number.MAX_SAFE_INTEGER;\n'
@@ -1296314,11 +1296689,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      await count(tokenizerText(statement).text),\n'
                              '    );\n'
                              '  }\n'
-                             '  const widestNote = isAutoMem\n'
-                             '    ? await '
-                             'count(tokenizerText(memoryFreshnessNote(-most)).text)\n'
-                             '    : 0;\n'
-                             '  return maxTokens - widestStatement - widestNote;\n'
+                             '  const noteTokens = note ? await '
+                             'count(tokenizerText(note).text) : 0;\n'
+                             '  return maxTokens - widestStatement - noteTokens;\n'
                              '}\n'
                              'import { createDebugLogger } from '
                              "'../utils/debugLogger.js';\n"
@@ -1297140,6 +1297513,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'status.state });\n'
                       '    }\n'
                       '\n'
+                      '    // For memory files, a per-file staleness caveat leads the '
+                      'content so the\n'
+                      '    // model knows it is a point-in-time snapshot and may be '
+                      'stale. It is\n'
+                      "    // decided once, before the page, so a page's room is the "
+                      'block less the\n'
+                      '    // very note that leads it.\n'
+                      "    let note = '';\n"
+                      '    if (isAutoMem) {\n'
+                      '      // Reuse the stat from above when we have it; only '
+                      're-stat as a\n'
+                      '      // fallback so memory-file behavior survives a stat '
+                      'failure earlier\n'
+                      '      // (which would leave `stats` undefined).\n'
+                      '      try {\n'
+                      '        const memStat = stats ?? (await fs.stat(absPath));\n'
+                      "        // The note, and the age it states, are the client's.\n"
+                      '        note = memoryFreshnessNote(memStat.mtimeMs);\n'
+                      '      } catch {\n'
+                      '        // Best-effort — if stat fails, omit the note '
+                      'silently.\n'
+                      '      }\n'
+                      '    }\n'
                       '    const maxTokens = this.config.getInlineBlockTokens();\n'
                       '    const count = (text: string) => '
                       'this.config.countInlineTokens(text, signal);\n'
@@ -1297147,7 +1297543,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      maxTokens,\n'
                       '      this.params.file_path,\n'
                       '      this.params.limit,\n'
-                      '      isAutoMem,\n'
+                      '      note,\n'
                       '      count,\n'
                       '    );\n'
                       '    // A page and what leads it are counted together once '
@@ -1297351,29 +1297747,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        llmContent = result.llmContent as Part | Part[];\n'
                       '      }\n'
                       '\n'
-                      '      // For memory files, prepend a per-file staleness caveat '
-                      'so the model knows\n'
-                      '      // the content is a point-in-time snapshot and may be '
-                      'stale.\n'
-                      '      if (isReadText(llmContent) && isAutoMem) {\n'
-                      '        // Reuse the stat from above when we have it; only '
-                      're-stat as a\n'
-                      '        // fallback so memory-file behavior survives a stat '
-                      'failure earlier\n'
-                      '        // (which would leave `stats` undefined).\n'
-                      '        try {\n'
-                      '          const memStat = stats ?? (await fs.stat(absPath));\n'
-                      '          // The note, and the age it states, are the '
-                      "client's.\n"
-                      '          const note = memoryFreshnessNote(memStat.mtimeMs);\n'
-                      '          if (note) {\n'
-                      '            llmContent = composed(harnessText(note), '
-                      'llmContent);\n'
-                      '          }\n'
-                      '        } catch {\n'
-                      '          // Best-effort — if stat fails, omit the note '
-                      'silently.\n'
-                      '        }\n'
+                      "      // A memory file's text is led by its staleness note.\n"
+                      '      if (isReadText(llmContent) && note) {\n'
+                      '        llmContent = composed(harnessText(note), llmContent);\n'
                       '      }\n'
                       '\n'
                       '      // A text page is one inline block: the page and whatever '
@@ -1297872,6 +1298248,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'status.state });\n'
                              '    }\n'
                              '\n'
+                             '    // For memory files, a per-file staleness caveat '
+                             'leads the content so the\n'
+                             '    // model knows it is a point-in-time snapshot and '
+                             'may be stale. It is\n'
+                             "    // decided once, before the page, so a page's room "
+                             'is the block less the\n'
+                             '    // very note that leads it.\n'
+                             "    let note = '';\n"
+                             '    if (isAutoMem) {\n'
+                             '      // Reuse the stat from above when we have it; only '
+                             're-stat as a\n'
+                             '      // fallback so memory-file behavior survives a '
+                             'stat failure earlier\n'
+                             '      // (which would leave `stats` undefined).\n'
+                             '      try {\n'
+                             '        const memStat = stats ?? (await '
+                             'fs.stat(absPath));\n'
+                             '        // The note, and the age it states, are the '
+                             "client's.\n"
+                             '        note = memoryFreshnessNote(memStat.mtimeMs);\n'
+                             '      } catch {\n'
+                             '        // Best-effort — if stat fails, omit the note '
+                             'silently.\n'
+                             '      }\n'
+                             '    }\n'
                              '    const maxTokens = '
                              'this.config.getInlineBlockTokens();\n'
                              '    const count = (text: string) => '
@@ -1297880,7 +1298281,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      maxTokens,\n'
                              '      this.params.file_path,\n'
                              '      this.params.limit,\n'
-                             '      isAutoMem,\n'
+                             '      note,\n'
                              '      count,\n'
                              '    );\n'
                              '    // A page and what leads it are counted together '
@@ -1298092,31 +1298493,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Part[];\n'
                              '      }\n'
                              '\n'
-                             '      // For memory files, prepend a per-file staleness '
-                             'caveat so the model knows\n'
-                             '      // the content is a point-in-time snapshot and may '
-                             'be stale.\n'
-                             '      if (isReadText(llmContent) && isAutoMem) {\n'
-                             '        // Reuse the stat from above when we have it; '
-                             'only re-stat as a\n'
-                             '        // fallback so memory-file behavior survives a '
-                             'stat failure earlier\n'
-                             '        // (which would leave `stats` undefined).\n'
-                             '        try {\n'
-                             '          const memStat = stats ?? (await '
-                             'fs.stat(absPath));\n'
-                             '          // The note, and the age it states, are the '
-                             "client's.\n"
-                             '          const note = '
-                             'memoryFreshnessNote(memStat.mtimeMs);\n'
-                             '          if (note) {\n'
-                             '            llmContent = composed(harnessText(note), '
+                             "      // A memory file's text is led by its staleness "
+                             'note.\n'
+                             '      if (isReadText(llmContent) && note) {\n'
+                             '        llmContent = composed(harnessText(note), '
                              'llmContent);\n'
-                             '          }\n'
-                             '        } catch {\n'
-                             '          // Best-effort — if stat fails, omit the note '
-                             'silently.\n'
-                             '        }\n'
                              '      }\n'
                              '\n'
                              '      // A text page is one inline block: the page and '
@@ -1533636,7 +1534017,7 @@ FINAL_FILES = {'.qwen/e2e-tests/2026-06-13-file-history-snapshot-persistence.md'
  'packages/core/src/test-utils/recorded-generation-fixture.ts': 'b9344af317769fe30fe7b6b7e559dda203371a164ad625629306022b8578c194',
  'packages/core/src/test-utils/request-author-runs.ts': '1060046cfa7cd5452120459721d81162c868ee54b5bb450ecf1d3a50f087c023',
  'packages/core/src/test-utils/served-call.ts': 'f55c51f7a27b95d8dd6043543f3ac76648943c02924e2241741891b1d0c99849',
- 'packages/core/src/test-utils/served-token-counts.json': '3607e054b59ca1e0af41b350f207a1bbe6ccea96d96e1b76fdb7dbf17680595f',
+ 'packages/core/src/test-utils/served-token-counts.json': '97dad088436bf25efab9e611ddfd15c9140e1ff159ea20d0933b1dfee4326de6',
  'packages/core/src/test-utils/terminal-usage-fixture.ts': '7725a59194f7db449eea69eaeb30f19ea4141242241d1030b18c49d74fa81fe5',
  'packages/core/src/test-utils/token-counter.ts': '79453de60d6695ee5349c652bb12dcfad53b5b3bd8865ec0f62d7decefc26160',
  'packages/core/src/tools/__snapshots__/shell.test.ts.snap': '6c7776c2705cbc3eeb28b26aa9ca79036e9a814e40c5e347bfb1945341883a0f',
@@ -1533678,8 +1534059,8 @@ FINAL_FILES = {'.qwen/e2e-tests/2026-06-13-file-history-snapshot-persistence.md'
  'packages/core/src/tools/notebook-edit.test.ts': 'c7380473bb244a8ab7dd91e4f8650c4f252cd79c581225636d423e2bffb1cd32',
  'packages/core/src/tools/notebook-edit.ts': '881deaf3f5b9949f73a9e6c60db05eddf60e83eccd5fbc16737623c6a70cb76e',
  'packages/core/src/tools/priorReadEnforcement.ts': '919bb50470845497d299e531eb2e00edb2b0a946300c05d025d728f2fa5dbde6',
- 'packages/core/src/tools/read-file.test.ts': 'ee465859ec230ae1e11e0c2f5ca1e4aebc87f0fd44bf3bc3db51a767a3b4164f',
- 'packages/core/src/tools/read-file.ts': 'd10631134715b29345cb7eb41b9380ba2202135bb52b6c622bd1b6418dd466b7',
+ 'packages/core/src/tools/read-file.test.ts': '25b7f90166f4a4de4349ab4f656be064c7cd1e6ccfc2a05e0dc3d7c6b32c1a2c',
+ 'packages/core/src/tools/read-file.ts': 'b1f04b9e6089314d671c99822b36da6853176d43f1880f9d4b052f0f74c80049',
  'packages/core/src/tools/read-mcp-resource.test.ts': '5dce137f3fb74d39277bd538d0af55a2b2c49f26df7a41f6fd3acc55b4a20092',
  'packages/core/src/tools/read-mcp-resource.ts': '537e35f5d9e5c24002bde960c50d9cdc6fc4a46e9b8c89f0e4cbb27df9459608',
  'packages/core/src/tools/ripGrep.test.ts': '3c40c977e86b1e1b65b74e29461b4133abfa02d4a44d2256ae326f327ee74829',

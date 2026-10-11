@@ -12080,11 +12080,15 @@ def _validate_bounded_output_after(state: State) -> None:
     # caller's own limit was not cut, and saying it was is false. The call
     # asks for the caller's own limit, never the size of the page that fit.
     # A page starts from one inline block less the widest statement that can
-    # lead it, every number at its most digits at once, counted by the served
-    # tokenizer; the page and its statement are then counted together where
-    # the read composes them, and a page that comes to more is read again with
-    # that much less room, so what is handed on is always the count of what is
-    # handed on. The description quotes the statement in the same words.
+    # lead it, every number at its most digits at once, and less the
+    # staleness note that leads a memory file's page -- the note itself,
+    # decided once from the file's age before the page is read, never a note
+    # for an invented age, which would follow the clock -- each counted by the
+    # served tokenizer; the page and what leads it are then counted together
+    # where the read composes them, and a page that comes to more is read
+    # again with that much less room, so what is handed on is always the
+    # count of what is handed on. The description quotes the statement in the
+    # same words.
     read_file_tool = "packages/core/src/tools/read-file.ts"
     _require_all(
         state,
@@ -12106,6 +12110,11 @@ def _validate_bounded_output_after(state: State) -> None:
             "    ...[{ lines: most, remaining: most }, { atLeast: most }].map(",
             "    `${pageEnds(most, most, most)}${PAGE_STATEMENT_BREAK}`,\n    `${pageEnds(most, 0, most)}${PAGE_STATEMENT_BREAK}`,",
             "      await count(tokenizerText(statement).text),",
+            "  note: string,\n  count: (text: string) => Promise<number>,\n): Promise<number> {",
+            "  const noteTokens = note ? await count(tokenizerText(note).text) : 0;\n  return maxTokens - widestStatement - noteTokens;",
+            "        note = memoryFreshnessNote(memStat.mtimeMs);",
+            "      this.params.limit,\n      note,\n      count,\n    );",
+            "      if (isReadText(llmContent) && note) {\n        llmContent = composed(harnessText(note), llmContent);\n      }",
             "if (result.nextRead && result.linesShown && trueTotal !== undefined) {",
             "            : { lines: trueTotal, remaining: trueTotal - last },",
             "            nextOffset: result.nextRead.offset,\n            limit: this.params.limit,\n          }),\n          harnessText(PAGE_STATEMENT_BREAK),\n          page,\n        );",
@@ -12126,8 +12135,16 @@ def _validate_bounded_output_after(state: State) -> None:
         "No lines: the file has",
         "states the lines it returned, the file's total line count, and the exact next call to make",
         "function pageLineCount(",
+        "memoryFreshnessNote(-",
+        "widestNote",
     ):
         forbid_text(state, read_file_tool, retired, label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/read-file.test.ts",
+        "leads a memory file older than a day with its staleness note, and pages it within one block less that note",
+        label=label,
+    )
 
     # A count that says lines means lines, in one place for every tool: a
     # final line break ends the last line and does not start another, and an
