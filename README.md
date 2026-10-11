@@ -602,7 +602,9 @@ while something settles — and is no limit any backend this client admits sets.
 reaches the compaction trigger `K`, and no turn is issued once it reaches the
 admission limit `T`.
 Subagents run
-sequentially in the foreground and return concise findings to the same main thread;
+sequentially in the foreground -- agent calls of one message run one after the
+other, where every runner had run them at once -- and return concise findings to
+the same main thread;
 there are no background branches, teams, worktrees, alternate models, or nested
 subagents.
 
@@ -774,7 +776,10 @@ A terminal conversation and a headless conversation share the same obligations:
 
 The sealed deployment separately fixes its advertised capabilities: the ten tools
 below, sequential foreground `general-purpose` and `Explore` children, immutable
-settings and instructions, and per-child scratch and effect journals. Those two
+settings and instructions, and per-child scratch, with an effect journal for each
+`Explore` child. The agent tool declares that text and schema from its
+construction, before the subagents are listed, so turn 0 cannot carry
+upstream's. Those two
 children are defined by the deployment: a `.qwen/agents/<name>.md` beside the work
 is named in the run and never read, so the workspace cannot replace the prompt,
 the tools, the model or the working time of the agent that works on it. One model

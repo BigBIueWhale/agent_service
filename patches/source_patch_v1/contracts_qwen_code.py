@@ -413,6 +413,53 @@ def _validate_locked_boundary_after(state: State) -> None:
         "custom agent definitions, and model overrides are unavailable.",
         label=label,
     )
+    # The declaration is written before the constructor returns, and an agent
+    # call runs in order where one awaited foreground subagent runs at a time,
+    # in every runner: the scheduler, the headless runner and an ACP session.
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "    this.subagentManager = config.getSubagentManager();\n"
+        "    // The description and schema the tool is declared with are written\n",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "    this.updateDescriptionAndSchema();\n"
+        "    this.removeChangeListener = this.subagentManager.addChangeListener(() => {",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/core/coreToolScheduler.ts",
+        "  if (canonicalToolName(name) === ToolNames.AGENT) {\n"
+        "    return !config.getForegroundAgentsOnly();\n"
+        "  }",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/nonInteractiveCli.ts",
+        "      request.args,\n      config,\n    ),",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/acp-integration/session/Session.ts",
+        "        canonicalToolName(fc.name ?? '') === ToolNames.AGENT &&\n"
+        "        !this.config.getForegroundAgentsOnly();",
+        label=label,
+    )
+    for path, case in (
+        ("packages/core/src/tools/agent/agent.test.ts",
+         "declares the foreground-agents-only text and schema before the subagents are listed"),
+        ("packages/core/src/core/coreToolScheduler.test.ts",
+         "runs agent calls in order where one awaited foreground subagent runs at a time"),
+        ("packages/cli/src/nonInteractiveCli.test.ts",
+         "runs agent calls one after another where one awaited foreground subagent runs at a time"),
+    ):
+        require_text(state, path, case, label=label)
     _require_all(
         state,
         helpers,
@@ -13439,7 +13486,12 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "trailer, no pull request attribution, and no attribution note is written. "
             "Subagent definitions come from the built-ins alone, and one offered by the "
             "workspace is refused by path rather than skipped, so the work cannot choose the agent "
-            "that works on it."
+            "that works on it. The agent tool is declared with the foreground-only text and schema "
+            "from its construction, where they were written only once listing the subagents had "
+            "resolved, so a declaration read first -- turn 0's -- could carry upstream's text and "
+            "fork, background and team fields; and its calls run one at a time, as that text and "
+            "its refusals say and the Explore effect journal needs, where every runner ran agent "
+            "calls of one message at once."
         ),
         removal_condition=(
             "Upstream provides the same sealed configuration boundary and adversarial initialization "
