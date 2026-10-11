@@ -301016,7 +301016,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
      expect(normalize('  GEMINI-1.5-PRO  ')).toBe('gemini-1.5-pro');
    });
  
-@@ -509,68 +521,587 @@
+@@ -509,68 +521,592 @@
        expect(tokenLimit('QWEN3-MAX', 'output')).toBe(32768);
        expect(tokenLimit('qwen3-max-20250601', 'output')).toBe(32768);
      });
@@ -301040,9 +301040,9 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  1_048_576,
 +];
 +
-+/** `M`, `R` and `S`, declared in tokens, and `F`, the framing. */
++/** `M`, `C` and `S`, declared in tokens, and `F`, the framing. */
 +const M = 16_384;
-+const R = 24_576;
++const C = 40_960;
 +const S = 32_768;
 +const F = 61;
 +
@@ -301072,7 +301072,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  // The served profile.
 +  const WINDOW = 262_144;
 +
-+  it('declares D, A, M, S, R and F in tokens that do not scale with the window', () => {
++  it('declares D, A, M, S, C and F in tokens that do not scale with the window', () => {
 +    // The client's preamble and what a request adds are fixed texts, the
 +    // workspace's instruction files are one inline block, and a page, a
 +    // snapshot, a turn's reasoning and the template's framing do not grow
@@ -301110,13 +301110,18 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    expect(partitionContextWindow(1_048_576).imagesPerRequest).toBe(63);
 +  });
 +
-+  it('gives a turn one inline block and R beside it, and the first draw a snapshot beside a turn', () => {
-+    // A turn's largest legitimate act is writing one block, at most M
-+    // tokens, after reasoning about it, so C = M + R; a draw writes a
++  it('gives a turn its declared room, R beside one inline block, and the first draw a snapshot beside a turn', () => {
++    // C is declared from the recorded turns; a turn's largest legitimate act
++    // is writing one block, at most M tokens, after reasoning about it, so
++    // the reasoning it leaves such a turn is R = C - M, which holds the
++    // 95th-percentile turn's recorded reasoning (14,846); a draw writes a
 +    // snapshot in the same stream it reasons in, so Q = S + C.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
-+      expect(p.turnGeneration).toBe(M + R);
++      expect(p.turnGeneration).toBe(C);
++      expect(p.turnGeneration - p.inlineBlockTokens).toBeGreaterThanOrEqual(
++        14_846,
++      );
 +      expect(p.drawGeneration).toBe(S + p.turnGeneration);
 +    }
 +  });
@@ -301172,11 +301177,8 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +        p.turnGeneration + 1,
 +      );
 +    }
-   });
- 
--  it('tapers to the room left as the prompt approaches the window', () => {
--    // 200K window, 170K prompt: room = 200K − 170K − 10K = 20K < 32K ceiling.
--    expect(clampOutputTokensToWindow(32_000, 200_000, 170_000)).toBe(20_000);
++  });
++
 +  it('compacts a snapshot below the bound no turn is issued at', () => {
 +    // T - K = Q - C = S: the room in which a failed compaction is followed
 +    // by turns and attempted again before the session can end on one.
@@ -301185,17 +301187,9 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      expect(p.compactionTrigger).toBeLessThan(p.admissionLimit);
 +      expect(p.admissionLimit - p.compactionTrigger).toBe(p.snapshotTokens);
 +    }
-   });
- 
--  it('keeps prompt + max_tokens under the window (issue #5950 invariant)', () => {
--    // The #5950 shape: 131K window, ~71K prompt, 64K ceiling. The clamp must
--    // never let prompt + output exceed the window.
--    const window = 131_072;
--    const prompt = 71_349;
--    const clamped = clampOutputTokensToWindow(64_000, window, prompt);
--    expect(prompt + clamped).toBeLessThanOrEqual(window);
--    expect(clamped).toBe(window - prompt - outputClampMargin(window));
-+  it('takes S, M, R and A from the trigger, M, R and A from the admission limit, and none of the preamble', () => {
++  });
++
++  it('takes S, C and A from the trigger, C and A from the admission limit, and none of the preamble', () => {
 +    // A token given to a turn, a draw or what a request adds is a token of
 +    // work every segment before compaction does not have. D is in neither
 +    // bound: the preamble is in every request they are compared with.
@@ -301203,16 +301197,11 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    // differently fails here.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
-+      expect(p.compactionTrigger).toBe(window - S - M - R - p.promptAdditions);
-+      expect(p.admissionLimit).toBe(window - M - R - p.promptAdditions);
++      expect(p.compactionTrigger).toBe(window - S - C - p.promptAdditions);
++      expect(p.admissionLimit).toBe(window - C - p.promptAdditions);
 +    }
-   });
- 
--  it('floors at MIN_CLAMPED_OUTPUT_TOKENS when no room is left', () => {
--    // Prompt at/above the window: never send max_tokens ≤ 0; compaction /
--    // hard-rescue owns this regime.
--    expect(clampOutputTokensToWindow(32_000, 40_000, 39_000)).toBe(
--      MIN_CLAMPED_OUTPUT_TOKENS,
++  });
++
 +  it('names the served partition and the least a segment after a compaction has', () => {
 +    // The one deployment this repo builds for. Written out once so the
 +    // contracts and the documentation quote a number this file asserts.
@@ -301235,21 +301224,19 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    expect(survivingRequest(served)).toBe(135_560);
 +    const margin = served.compactionTrigger - 1 - survivingRequest(served);
 +    expect(margin).toBe(49_783);
-+    // The margin's closed form: a token of M costs it four, of S or R two,
-+    // of the result, the client's preamble or A one, of F four.
++    // The margin's closed form, with C declared: a token of M costs it two,
++    // of S or C two, of the result, the client's preamble or A one, of F four.
 +    expect(margin).toBe(
 +      WINDOW -
 +        2 * S -
-+        4 * M -
-+        2 * R -
++        2 * served.turnGeneration -
++        2 * M -
 +        served.resultTokens -
 +        served.clientPreamble -
 +        served.promptAdditions -
 +        4 * F -
 +        1,
-     );
--    expect(clampOutputTokensToWindow(32_000, 40_000, 60_000)).toBe(
--      MIN_CLAMPED_OUTPUT_TOKENS,
++    );
 +    // And at the larger windows the same quantities leave every token more
 +    // to the bounds and the margin.
 +    const larger = [524_288, 1_048_576].map((window) => {
@@ -301350,8 +301337,11 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  it('returns a text that fits whole, in its NFC form', () => {
 +    expect(cutToTokenizerBytes('short', 32)).toEqual({ text: 'short', bytes: 5 });
 +    expect(cutToTokenizerBytes('e\u0301', 2)).toEqual({ text: '\u00E9', bytes: 2 });
-+  });
-+
+   });
+ 
+-  it('tapers to the room left as the prompt approaches the window', () => {
+-    // 200K window, 170K prompt: room = 200K − 170K − 10K = 20K < 32K ceiling.
+-    expect(clampOutputTokensToWindow(32_000, 200_000, 170_000)).toBe(20_000);
 +  it('cuts the normalized text on a code-point boundary, within the bound', () => {
 +    // Three bytes each, so a cut at 32 lands inside the eleventh.
 +    const euros = '€'.repeat(12);
@@ -301365,8 +301355,16 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      text: '😀'.repeat(8),
 +      bytes: 32,
 +    });
-+  });
-+
+   });
+ 
+-  it('keeps prompt + max_tokens under the window (issue #5950 invariant)', () => {
+-    // The #5950 shape: 131K window, ~71K prompt, 64K ceiling. The clamp must
+-    // never let prompt + output exceed the window.
+-    const window = 131_072;
+-    const prompt = 71_349;
+-    const clamped = clampOutputTokensToWindow(64_000, window, prompt);
+-    expect(prompt + clamped).toBeLessThanOrEqual(window);
+-    expect(clamped).toBe(window - prompt - outputClampMargin(window));
 +  it('bounds what U+1D1C0 normalizes to, not what it is written in', () => {
 +    // Five of them are twenty bytes as written and sixty in NFC; a cut to
 +    // twenty keeps the first five of the fifteen characters NFC produced.
@@ -301374,14 +301372,21 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    expect(cut.bytes).toBe(20);
 +    expect(cut.text).toBe('\u{1D1BA}\u{1D165}\u{1D16F}\u{1D1BA}\u{1D165}');
 +    expect(tokenizerText(cut.text)).toEqual(cut);
-+  });
-+
+   });
+ 
+-  it('floors at MIN_CLAMPED_OUTPUT_TOKENS when no room is left', () => {
+-    // Prompt at/above the window: never send max_tokens ≤ 0; compaction /
+-    // hard-rescue owns this regime.
+-    expect(clampOutputTokensToWindow(32_000, 40_000, 39_000)).toBe(
+-      MIN_CLAMPED_OUTPUT_TOKENS,
 +  it('returns nothing for a bound that admits nothing, and refuses a negative one', () => {
 +    expect(cutToTokenizerBytes('anything', 0)).toEqual({ text: '', bytes: 0 });
 +    expect(() => cutToTokenizerBytes('anything', -1)).toThrow(
 +      'does not fit the bound it was cut to',
      );
-   });
+-    expect(clampOutputTokensToWindow(32_000, 40_000, 60_000)).toBe(
+-      MIN_CLAMPED_OUTPUT_TOKENS,
++  });
 +});
 +
 +/** A count that is the NFC bytes: the densest the served tokenizer can be. */
@@ -301475,7 +301480,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    });
 +    const long = Array.from({ length: 1_000 }, (_, i) => `line ${i}`).join(
 +      '\n',
-+    );
+     );
 +    const head = await keepLeadingLines(long, 1_000, countFourBytesPerToken);
 +    expect(head.tokens).toBeLessThanOrEqual(1_000);
 +    expect(fourBytesPerToken(head.text)).toBe(head.tokens);
@@ -301483,8 +301488,15 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    const tail = await keepTrailingLines(long, 1_000, countFourBytesPerToken);
 +    expect(tail.tokens).toBeLessThanOrEqual(1_000);
 +    expect(long.endsWith(tail.text.replace(/^\.\.\./, ''))).toBe(true);
-+  });
-+
+   });
+ 
+-  it('scales the margin at 5% for huge windows', () => {
+-    expect(outputClampMargin(200_000)).toBe(10_000);
+-    expect(outputClampMargin(1_000_000)).toBe(50_000);
+-    // Small windows keep the 10K floor.
+-    expect(outputClampMargin(40_000)).toBe(10_000);
+-    // 1M window, 500K prompt: room = 1M − 500K − 50K = 450K, ceiling binds.
+-    expect(clampOutputTokensToWindow(64_000, 1_000_000, 500_000)).toBe(64_000);
 +  it('slice the first line that does not fit and mark it as upstream marks a sliced line', async () => {
 +    // Two tokens past the whole lines leave room for the line break, the mark
 +    // and one character of the next line.
@@ -301513,15 +301525,10 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      whole: 0,
 +      sliced: true,
 +    });
-+  });
+   });
  
--  it('scales the margin at 5% for huge windows', () => {
--    expect(outputClampMargin(200_000)).toBe(10_000);
--    expect(outputClampMargin(1_000_000)).toBe(50_000);
--    // Small windows keep the 10K floor.
--    expect(outputClampMargin(40_000)).toBe(10_000);
--    // 1M window, 500K prompt: room = 1M − 500K − 50K = 450K, ceiling binds.
--    expect(clampOutputTokensToWindow(64_000, 1_000_000, 500_000)).toBe(64_000);
+-  it('respects an explicit ceiling below the room', () => {
+-    expect(clampOutputTokensToWindow(8_000, 40_000, 10_000)).toBe(8_000);
 +  it('mark no slice that would hold none of the line', async () => {
 +    // After the whole lines, the line break and the mark leave nothing.
 +    expect(await keepLeadingLines(text, 15, bytesAsTokens)).toEqual({
@@ -301538,8 +301545,12 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    });
    });
  
--  it('respects an explicit ceiling below the room', () => {
--    expect(clampOutputTokensToWindow(8_000, 40_000, 10_000)).toBe(8_000);
+-  it('never inflates an explicit ceiling below the floor (review finding)', () => {
+-    // QWEN_CODE_MAX_OUTPUT_TOKENS=2000 on a capacity-constrained backend:
+-    // the floor applies to the ROOM, not to the user's explicit ceiling.
+-    expect(clampOutputTokensToWindow(2_000, 200_000, 50_000)).toBe(2_000);
+-    // Even with no room left, a tiny explicit ceiling is preserved.
+-    expect(clampOutputTokensToWindow(2_000, 40_000, 39_000)).toBe(2_000);
 +  it('never meet the cut on a blank line, which is left to the cut', async () => {
 +    // The start would close on two blank lines, the end open on two.
 +    expect(
@@ -301570,12 +301581,8 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    });
    });
  
--  it('never inflates an explicit ceiling below the floor (review finding)', () => {
--    // QWEN_CODE_MAX_OUTPUT_TOKENS=2000 on a capacity-constrained backend:
--    // the floor applies to the ROOM, not to the user's explicit ceiling.
--    expect(clampOutputTokensToWindow(2_000, 200_000, 50_000)).toBe(2_000);
--    // Even with no room left, a tiny explicit ceiling is preserved.
--    expect(clampOutputTokensToWindow(2_000, 40_000, 39_000)).toBe(2_000);
+-  it('keeps OUTPUT_TOKEN_CEILING aligned with the escalation target', () => {
+-    expect(OUTPUT_TOKEN_CEILING).toBe(ESCALATED_MAX_TOKENS);
 +  it('count and hand on the NFC form, and slice on a code-point boundary', async () => {
 +    expect(await keepLeadingLines('café', 32, bytesAsTokens)).toEqual({
 +      text: 'café',
@@ -301619,10 +301626,8 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    await expect(
 +      keepTrailingLines('anything', 1.5, bytesAsTokens),
 +    ).rejects.toThrow('A cut is made to a whole number of tokens, not 1.5.');
-   });
- 
--  it('keeps OUTPUT_TOKEN_CEILING aligned with the escalation target', () => {
--    expect(OUTPUT_TOKEN_CEILING).toBe(ESCALATED_MAX_TOKENS);
++  });
++
 +  it('refuse what the counts say does not fit, rather than hand it on', async () => {
 +    // A counter that disagrees with itself between the search and the
 +    // final count is caught where the text is handed on.
@@ -301644,7 +301649,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('defaultOutputCeiling', () => {
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
-@@ -625,6 +1156,39 @@
+@@ -625,6 +1161,39 @@
    it('returns undefined when either side is absent (caller applies its own fallback)', () => {
      expect(reconcileMaxTokens(8_000, undefined)).toBeUndefined();
      expect(reconcileMaxTokens(undefined, 8_000)).toBeUndefined();
@@ -301706,7 +301711,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
  /**
   * Token limit types for different use cases.
   * - 'input': Maximum input context window size
-@@ -8,88 +20,872 @@
+@@ -8,88 +20,877 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -301820,9 +301825,9 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * verified exactly as `D` is, because the template belongs to the engine
 + * rather than to this repo, which pins no copy of it.
 + *
-+ * `R`, the reasoning a turn may do beside writing one inline block whole,
-+ * which makes `C`, the room every turn is issued with: `C = M + R`. `C` is
-+ * sized for the largest thing a turn legitimately does: write one inline
++ * `C`, the room every turn is issued with, declared from what the turns the
++ * model was recorded taking needed, and `R = C - M`, the reasoning it leaves a
++ * turn that writes the largest thing a turn legitimately does: one inline
 + * block -- a file, a note, a report; anything longer is written in parts, a
 + * block to a turn, as it is read a page at a time -- after reasoning about
 + * what to write. A turn that reaches `C` has done none of what it was doing --
@@ -301907,12 +301912,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * before compaction comes. `D` is in neither: the preamble is already in every
 + * request the bounds are compared with. The fit's margin,
 + * `K - 1 - (D + (S + F) + (M + F) + (P + F) + (C + F))`, is
-+ * `W - 2S - 4M - 2R - P - D' - A - 4F - 1`, where `D'` is the client's part
-+ * of `D`: a token of `M` costs it four -- the fit carries the workspace's
-+ * files, the authored input and a turn that may write a block, and `K` holds
-+ * back a turn's room -- and five while `M` is the larger term of `P`, which
-+ * at these magnitudes it is not; a token of `S` or `R` costs it two, a token
-+ * of `P`, `D'` or `A` one, and a token of `F` four.
++ * `W - 2S - 2C - 2M - P - D' - A - 4F - 1`, where `D'` is the client's part
++ * of `D`: with `C` declared, a token of `M` costs it two -- the fit carries
++ * the workspace's files and the authored input, each a block -- and three
++ * while `M` is the larger term of `P`, which at these magnitudes it is not,
++ * and it costs a turn that writes a block a token of the reasoning `R`; a token
++ * of `S` or `C` costs it two, a token of `P`, `D'` or `A` one, and a token of
++ * `F` four.
   */
 -export function outputClampMargin(contextWindowSize: number): TokenCount {
 -  return Math.max(10_000, Math.round(0.05 * contextWindowSize));
@@ -302014,13 +302020,16 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + *
 + * A page size, and a policy whose trade is plain. A larger page reads a file
 + * in fewer turns, and every turn spends reasoning and a call beside its page;
-+ * but a page is also the result a compaction carries and the block a turn
-+ * writes whole within `C`, so every token of `M` is four tokens of the fit's
-+ * margin and a token of the reasoning a turn writing a whole block has left.
-+ * `M` is the largest power of two that leaves a turn writing a whole block
-+ * the reasoning the 95th-percentile turn was recorded doing: of the 244 turns
-+ * of two six-hour runs of one long-reading probe, that turn reasoned 8,495
-+ * tokens in one run and 14,846 in the other, and `C - M` holds both. By the
++ * but a page is also the input a compaction carries, the workspace's
++ * instruction files' share of `D`, and the block a turn writes whole within
++ * `C`, so every token of `M` is two tokens of the fit's margin and a token of
++ * `R`, the reasoning a turn writing a whole block has left. One constraint
++ * bounds it: `R = C - M` must hold the reasoning the 95th-percentile turn was
++ * recorded doing -- of the 244 turns of two six-hour runs of one long-reading
++ * probe, that turn reasoned 8,495 tokens in one run and 14,846 in the other --
++ * so `M` is at most 26,114. Within that bound the number is a policy, not a
++ * derivation: no measured constraint picks 16,384 over another page size
++ * below 26,114, and none is claimed here. By the
 + * served tokenizer, this client's own TypeScript and the engine's Python run
 + * close to 3.9 bytes a token pooled, the client's Markdown 4.4 and its JSON
 + * 3.5, though a single file can fall to 1.4 and digits, hex and base64 run
@@ -302030,18 +302039,19 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +const INLINE_BLOCK_TOKENS = 16_384;
 +
 +/**
-+ * `R` = 24,576 tokens, so `C = M + R` is 40,960.
++ * `C` = 40,960 tokens, so `R = C - M` is 24,576.
 + *
 + * How long the model reasons is its own behaviour, set by the model and the
-+ * work, so `R` is no share of the window: it is what `C` leaves beside one
-+ * whole block, and `C` is what the recorded turns needed. In those runs every
-+ * turn but one fitted 40,960, the largest at 37,531 with 24,840 of it
-+ * reasoning; the one that reached 40,960 had reasoned 26,129 tokens and was
-+ * writing a note whole; it was refused, asked for again told why, and the
-+ * redraw was accepted at 26,679. A turn that needs more than `C` is refused
-+ * and asked for again, and does less in it.
++ * work, so `C` is no share of the window: it is declared from what the
++ * recorded turns needed. In those runs every turn but one fitted 40,960 -- the
++ * largest at 37,531 with 24,840 of it reasoning, and 40,960 is the next
++ * multiple of 4,096 above it -- and the one that reached 40,960 had reasoned
++ * 26,129 tokens and was writing a note whole; it was refused, asked for again
++ * told why, and the redraw was accepted at 26,679. A turn that needs more
++ * than `C` is refused and asked for again, and does less in it. `R` is what
++ * `C` leaves beside one whole block, derived and not declared.
 + */
-+const TURN_REASONING_TOKENS = 24_576;
++const TURN_GENERATION_TOKENS = 40_960;
 +
 +/**
 + * `S` = 32,768 tokens.
@@ -302117,7 +302127,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +/**
 + * Derive every context budget from the served window.
 + *
-+ * `D`, `A`, `M`, `S`, `R`, `F` and `I` are declared, and the two bounds take
++ * `D`, `A`, `M`, `S`, `C`, `F` and `I` are declared, and the two bounds take
 + * what the window has left, so a turn's room, the additions and `T` sum to the
 + * window exactly, as a draw's room, the additions and `K` do, at every window.
 + */
@@ -302141,7 +302151,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +    IMAGE_TOKENS + IMAGE_RESULT_STATEMENT_MAX_BYTES,
 +  );
 +  const imagesPerRequest = Math.floor((contextWindowSize - 1) / IMAGE_TOKENS);
-+  const turnGeneration = inlineBlockTokens + TURN_REASONING_TOKENS;
++  const turnGeneration = TURN_GENERATION_TOKENS;
 +  const drawGeneration = snapshotTokens + turnGeneration;
 +  const admissionLimit = contextWindowSize - turnGeneration - promptAdditions;
 +  const compactionTrigger =
@@ -302632,7 +302642,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -150,14 +946,14 @@
+@@ -150,14 +951,14 @@
    // 128K carve-outs for Opus 4.6+. Rewrite the dotted minor to hyphenated
    // up front so every downstream regex sees the canonical form regardless
    // of which alias the proxy exposed.
@@ -302649,7 +302659,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
    // the version parser and the limit tables agree on every alias shape.
    s = s.replace(/^(claude-[a-z]+-\d+(?:-\d+)?)\.(\d+)(?:\.\d+)*/, '$1-$2');
  
-@@ -392,18 +1188,19 @@
+@@ -392,18 +1193,19 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }

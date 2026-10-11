@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `dd0e6353619c54e361ac9ce913c65128ce303b997054369981901f2d60207248`
+- Review-diff SHA-256: `3555e483c69bda6d4a29daa947a94c407ef292c61fd22d81e179662fd0267d21`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `3e1665d73db798aab43a2b49c7ca40b6635548d42ff79ba3a3219f5dc607089d`
+- Transformer-manifest SHA-256: `f232152850e47b3623922fee18baedeae712992af50ff45544ae82247b56b439`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -249,14 +249,14 @@ which is the count the backend is launched to accept. `F`, the
 per-message framing, is 61 tokens: the most the served template wraps around
 one message, with room for the 6 a text's own edges were measured to add where
 they meet it, declared here and verified against the template rather than
-copied from it. `R`, the reasoning a turn is given beside its block, is 24,576
-tokens, declared from the turns recorded (`TURN_REASONING_TOKENS` says what it
-rests on). No declared quantity scales with the window: what each holds does
-not grow with it.
+copied from it. `C`, the room every turn is issued with, is 40,960 tokens,
+declared from the turns recorded (`TURN_GENERATION_TOKENS` says what it rests
+on). No declared quantity scales with the window: what each holds does not grow
+with it.
 
-`C`, the room every turn is issued with, is sized for the largest thing a turn
-legitimately does, write one inline block after reasoning about it, so
-`C = M + R`; `Q = S + C` is the room the first draw at a trigger has at least, a
+`C` is sized for the largest thing a turn legitimately does, write one inline
+block after reasoning about it, so the reasoning it leaves such a turn is
+`R = C - M`, 24,576 tokens; `Q = S + C` is the room every draw of a compaction has at least, a
 snapshot at its bound after a whole turn's reasoning. Two bounds follow. `T`,
 the admission limit, `T = W - C - A`: no turn is issued at or above it. `K`, the
 compaction trigger, `K = W - Q - A`: a send whose request reaches it compacts

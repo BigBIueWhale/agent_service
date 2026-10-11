@@ -209,14 +209,14 @@ from them:
 | --- | --- | --- |
 | `D`, the static preamble | the client's own text's measured worst case rounded up to 1,024s, plus `M` for the workspace's instruction files | 12,288 + 16,384 = 28,672 tokens |
 | `A`, what a request adds to the prompt it was admitted at | the measured additions rounded up to 1,024s | 3,072 tokens |
-| `M`, one inline block | a declared page size, counted by the served tokenizer | 16,384 tokens |
+| `M`, one inline block | a declared page size, counted by the served tokenizer: a policy within the one bound the recorded turns put on it, `C − M` at least the 95th-percentile turn's reasoning (14,846), so at most 26,114 | 16,384 tokens |
 | `S`, one compaction snapshot | declared from the snapshots the model was recorded writing, counted the same way | 32,768 tokens |
 | `F`, the per-message framing | the served template's widest, with room for what a text's own edges add where they meet it | 61 tokens |
-| `R`, a turn's reasoning beside one block | declared from the turns recorded | 24,576 tokens |
 | `I`, one image | the processor's pixel budget at one token per 32×32 pixels, and its two markers | 16,386 tokens |
 | `P`, one tool result | its text's `M`, or one image beside the sentence `read_file` says with it | 16,532 tokens |
 | images in one request | `floor((W − 1) / I)`, what the backend is launched to accept | 15 |
-| `C`, a turn's generation room | `M + R` | 40,960 tokens |
+| `C`, a turn's generation room | declared from the turns recorded: every accepted turn fitted, the largest 37,531, and 40,960 is the next multiple of 4,096 above it | 40,960 tokens |
+| `R`, a turn's reasoning beside one block | `C − M` | 24,576 tokens |
 | `Q`, the least room the first draw of a compaction has | `S + C` | 73,728 tokens |
 | `T`, the admission limit: no turn is issued at or above it | `W − C − A` | 218,112 tokens |
 | `K`, the compaction trigger: a send at or above it compacts first | `W − Q − A` | 185,344 tokens |
@@ -233,12 +233,12 @@ first turn's prompt is about 8,400 tokens, so the first segment works for about
 compaction left to `K`. The fit that keeps a compacted history from being
 compacted again by its very next send has a margin of its own,
 `K − 1 − (D + (S + F) + (M + F) + (P + F) + (C + F))`, which is
-`W − 2S − 4M − 2R − P − D′ − A − 4F − 1` with `D′` the client's part of `D`,
+`W − 2S − 2C − 2M − P − D′ − A − 4F − 1` with `D′` the client's part of `D`,
 49,783 tokens at the served window, 311,927 at 524,288 and 836,215 at
-1,048,576: a token of `M` costs it four, since `M` is the workspace's
-instruction files, the input a compaction carries and the block a turn writes,
-and `K` holds back a turn's room; a token of `S` or `R` costs it two, a token of
-`P`, `D′` or `A` one and a token of `F` four. Every declared quantity holds what
+1,048,576: with `C` declared, a token of `M` costs it two, since `M` is the
+workspace's instruction files and the input a compaction carries, and it costs a
+turn that writes a whole block a token of `R`; a token of `S` or `C` costs it
+two, a token of `P`, `D′` or `A` one and a token of `F` four. Every declared quantity holds what
 it holds whatever the window, so a window below 212,361 tokens has a negative
 margin, and a partition whose margin would fall below zero is refused rather
 than derived; `T` and `K` are 480,256 and 447,488 at 524,288 and 1,004,544 and
@@ -357,8 +357,9 @@ counted; past that, a text is decided by its line prefixes, searched by
 widening and then halving the extent counted, so deciding a result of any size
 or cutting it counts text about the size of the bound, and a line longer than
 that is counted whole, once. Nothing converts a count into bytes, or bytes into
-a count. `M` is the largest power of two that leaves a turn writing a whole
-block the reasoning the 95th-percentile turn was recorded doing (below). By the
+a count. One recorded constraint bounds `M`: a turn writing a whole block must
+keep the reasoning the 95th-percentile turn was recorded doing (below), so `M`
+is at most 26,114; within that bound 16,384 is a policy, not a derivation. By the
 served tokenizer, this client's TypeScript and the engine's Python run close to
 3.9 bytes a token pooled, the client's Markdown 4.4 and its JSON 3.5, though a
 single file can fall to 1.4 and digits, hex and base64 run 1.0 to 1.4; so a

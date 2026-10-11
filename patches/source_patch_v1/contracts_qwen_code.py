@@ -4744,7 +4744,7 @@ _PARTITION_DECLARED_NAMES = (
     "PROMPT_ADDITIONS_TOKENS",
     "INLINE_BLOCK_TOKENS",
     "SNAPSHOT_TOKENS",
-    "TURN_REASONING_TOKENS",
+    "TURN_GENERATION_TOKENS",
     "MESSAGE_FRAMING_TOKENS",
     "FRAMING_BOUNDARY_TOKENS",
 )
@@ -4859,7 +4859,7 @@ def _partition(
     additions = declared["PROMPT_ADDITIONS_TOKENS"]
     block = declared["INLINE_BLOCK_TOKENS"]
     snapshot = declared["SNAPSHOT_TOKENS"]
-    turn = block + declared["TURN_REASONING_TOKENS"]
+    turn = declared["TURN_GENERATION_TOKENS"]
     draw = snapshot + turn
     return {
         "staticPreamble": client + block,
@@ -4952,7 +4952,7 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             "  const staticPreamble = clientPreamble + inlineBlockTokens;",
             "  const resultTokens = Math.max(\n    inlineBlockTokens,\n    IMAGE_TOKENS + IMAGE_RESULT_STATEMENT_MAX_BYTES,\n  );",
             "  const imagesPerRequest = Math.floor((contextWindowSize - 1) / IMAGE_TOKENS);",
-            "  const turnGeneration = inlineBlockTokens + TURN_REASONING_TOKENS;",
+            "  const turnGeneration = TURN_GENERATION_TOKENS;",
             "  const drawGeneration = snapshotTokens + turnGeneration;",
             "  const admissionLimit = contextWindowSize - turnGeneration - promptAdditions;",
             "  const compactionTrigger =\n    contextWindowSize - drawGeneration - promptAdditions;",
@@ -5825,15 +5825,15 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "declares D, A, M, S, R and F in tokens that do not scale with the window",
+        "declares D, A, M, S, C and F in tokens that do not scale with the window",
         "holds one result to its text or one image beside its sentence, and a request to the images the window holds",
-        "gives a turn one inline block and R beside it, and the first draw a snapshot beside a turn",
+        "gives a turn its declared room, R beside one inline block, and the first draw a snapshot beside a turn",
         "spends the whole window twice over: a turn below T, a draw below K",
         "leaves what a compaction can leave standing below the trigger, at every window",
         "cannot overrun the window from the largest admitted prompt",
         "issues the first compaction at the trigger with a draw of room, and every later one with a turn",
         "compacts a snapshot below the bound no turn is issued at",
-        "takes S, M, R and A from the trigger, M, R and A from the admission limit, and none of the preamble",
+        "takes S, C and A from the trigger, C and A from the admission limit, and none of the preamble",
         "names the served partition and the least a segment after a compaction has",
         "refuses a window too small to hold what a compaction leaves standing",
         "refuses a window that is not a count of tokens",
